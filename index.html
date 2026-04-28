@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Triangle CI — Gestion Flotte</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --g:#1a6b3c;--gl:#e8f5ee;--gd:#155a32;
+  --b:#1a4b8c;--bl:#e8eef8;
+  --o:#c45a00;--ol:#fff0e0;
+  --r:#b91c1c;--rl:#fef2f2;
+  --gr:#6b7280;--grl:#f5f5f0;
+  --brd:#e0e0d8;--txt:#1a1a18;
+  --rad:10px;--shb:0 8px 32px rgba(0,0,0,.14)
+}
+html{font-size:16px}
+body{font-family:'DM Sans',system-ui,sans-serif;color:var(--txt);background:var(--grl);min-height:100vh;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input,textarea{font-family:inherit}
+#screen-admin,#screen-driver,#screen-success,#screen-fiche{display:none}
+
+/* LOADING */
+#loading{position:fixed;inset:0;background:var(--g);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#fff}
+#loading .spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{font-size:14px;opacity:.8}
+
+/* ADMIN */
+.a-head{background:var(--g);color:#fff;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(26,107,60,.3)}
+.a-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.a-logo-ico{width:30px;height:30px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.a-nav{background:#fff;border-bottom:1px solid var(--brd);display:flex;overflow-x:auto;scrollbar-width:none;position:sticky;top:58px;z-index:99}
+.a-nav::-webkit-scrollbar{display:none}
+.a-tab{padding:14px 18px;font-size:14px;font-weight:600;color:var(--gr);border-bottom:3px solid transparent;white-space:nowrap;cursor:pointer;transition:all .2s}
+.a-tab.on{color:var(--g);border-bottom-color:var(--g)}
+.a-body{padding:16px;max-width:1100px;margin:0 auto}
+.t-panel{display:none}.t-panel.on{display:block}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.mc{background:#fff;border:1px solid var(--brd);border-radius:var(--rad);padding:16px;text-align:center}
+.mc-n{font-size:34px;font-weight:700;line-height:1;margin-bottom:3px}
+.mc-n.g{color:var(--g)}.mc-n.b{color:var(--b)}.mc-n.o{color:var(--o)}
+.mc-l{font-size:11px;color:var(--gr);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.stitle{font-size:12px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.8px;margin:20px 0 10px}
+.trow{background:#fff;border:1px solid var(--brd);border-radius:var(--rad);padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.trow-ico{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.trow-info{flex:1;min-width:0}
+.trow-name{font-weight:600;font-size:14px}
+.trow-sub{font-size:12px;color:var(--gr);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge-free{background:var(--gl);color:var(--g)}
+.badge-svc{background:var(--bl);color:var(--b)}
+.badge-late{background:var(--ol);color:var(--o)}
+.empty{text-align:center;padding:24px;color:var(--gr);font-size:13px;background:#fff;border:1px solid var(--brd);border-radius:var(--rad)}
+
+/* TRUCKS GRID */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.tcard{background:#fff;border:1px solid var(--brd);border-radius:var(--rad);padding:14px 10px;text-align:center;cursor:pointer;transition:all .18s}
+.tcard:hover{box-shadow:var(--shb);transform:translateY(-2px);border-color:var(--g)}
+.tcard-num{font-size:11px;font-weight:700;color:var(--gr);margin-bottom:4px}
+.tcard-name{font-size:13px;font-weight:600;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tcard-st{font-size:11px;font-weight:600}
+.tcard-st.g{color:var(--g)}.tcard-st.b{color:var(--b)}.tcard-st.o{color:var(--o)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:3px}
+.dot-g{background:var(--g)}.dot-b{background:var(--b)}.dot-o{background:var(--o)}
+
+/* HISTORY */
+.lcard{background:#fff;border:1px solid var(--brd);border-radius:var(--rad);padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.lthumbs{display:flex;gap:4px;flex-shrink:0}
+.lthumbs img{width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--brd)}
+.linfo{flex:1;min-width:0}
+.lname{font-weight:600;font-size:14px}
+.lsub{font-size:12px;color:var(--gr)}
+.btn-voir{background:var(--gl);color:var(--g);padding:7px 12px;border-radius:7px;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0;border:none;cursor:pointer;font-family:inherit}
+
+/* SETTINGS */
+.sf{max-width:460px}
+.fg{margin-bottom:16px}
+.fl{display:block;font-size:11px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.fi{width:100%;border:1.5px solid var(--brd);border-radius:8px;padding:11px 13px;font-size:14px;background:#fff;outline:none;transition:border-color .2s}
+.fi:focus{border-color:var(--g)}
+.btn-g{background:var(--g);color:#fff;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600;border:none;cursor:pointer;font-family:inherit}
+.btn-gr{background:var(--grl);color:var(--txt);padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600;border:none;cursor:pointer;font-family:inherit}
+.btn-r{background:var(--rl);color:var(--r);padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600;border:none;cursor:pointer;font-family:inherit}
+.btn-add{background:var(--g);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px;border:none;cursor:pointer;font-family:inherit}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:20px}
+.modal-bg.on{display:flex}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;box-shadow:var(--shb)}
+.m-head{padding:18px 18px 14px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1;border-radius:14px 14px 0 0}
+.m-title{font-size:17px;font-weight:700}
+.m-close{width:30px;height:30px;border-radius:50%;background:var(--grl);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--gr);cursor:pointer}
+.m-body{padding:18px}
+.m-foot{padding:14px 18px;border-top:1px solid var(--brd);display:flex;gap:8px;justify-content:flex-end}
+.qr-wrap{text-align:center;margin:16px 0 8px}
+.qr-info{font-size:11px;color:var(--gr);text-align:center;margin-top:6px;word-break:break-all}
+.btn-print-qr{width:100%;background:var(--g);color:#fff;padding:11px;border-radius:8px;font-size:13px;font-weight:600;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:5px;border:none;cursor:pointer;font-family:inherit}
+
+/* DRIVER */
+#screen-driver{background:var(--grl);min-height:100vh;padding-bottom:40px}
+.d-head{background:var(--g);color:#fff;padding:20px 16px;text-align:center}
+.d-ref{font-size:10px;letter-spacing:1.5px;opacity:.7;text-transform:uppercase;margin-bottom:8px}
+.d-num{font-size:46px;font-weight:700;line-height:1;margin-bottom:4px}
+.d-name{font-size:18px;font-weight:600;margin-bottom:3px}
+.d-meta{font-size:13px;opacity:.8;margin-bottom:12px}
+.d-typebadge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.5px}
+.tb-liv{background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.4);color:#fff}
+.tb-ret{background:rgba(255,220,100,.3);border:1.5px solid rgba(255,220,100,.6);color:#ffe066}
+
+/* PROC */
+.proc{background:#fff;border:1px solid var(--brd);border-radius:var(--rad);margin:12px;overflow:hidden}
+.proc-head{background:#1a1a18;color:#fff;padding:11px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+.proc-body{padding:14px}
+.proc-alerte{background:var(--ol);border-left:4px solid var(--o);padding:11px 13px;border-radius:0 7px 7px 0;font-size:12px;line-height:1.6;margin-bottom:14px;color:#7a3a00;font-weight:500}
+.proc-sub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--g);margin:12px 0 7px}
+.proc-steps{list-style:none}
+.proc-steps li{display:flex;gap:9px;font-size:12px;line-height:1.5;padding:5px 0;border-bottom:1px solid var(--brd)}
+.proc-steps li:last-child{border-bottom:none}
+.snum{width:18px;height:18px;background:var(--g);color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.proc-warn{background:var(--rl);border-left:4px solid var(--r);padding:9px 11px;border-radius:0 6px 6px 0;font-size:11px;color:var(--r);font-weight:600;margin-top:12px;line-height:1.5}
+
+/* FORM */
+.fsec{background:#fff;border:1px solid var(--brd);border-radius:var(--rad);margin:12px;overflow:hidden}
+.fsec-head{background:var(--g);color:#fff;padding:11px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+.fsec-body{padding:14px}
+.frow{margin-bottom:14px}
+.frow:last-child{margin-bottom:0}
+.flabel{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gr);margin-bottom:5px}
+.flabel.req::after{content:' *';color:var(--r)}
+.fro{background:var(--grl);border:1.5px solid var(--brd);border-radius:8px;padding:11px 13px;font-size:14px;font-weight:500}
+.finput{width:100%;border:1.5px solid var(--brd);border-radius:8px;padding:11px 13px;font-size:15px;background:#fff;outline:none;-webkit-appearance:none;appearance:none}
+.finput:focus{border-color:var(--g)}
+
+/* FUEL */
+.fuel-row{display:flex;gap:6px}
+.fuel-btn{flex:1;padding:10px 4px;border:2px solid var(--brd);border-radius:8px;font-size:13px;font-weight:600;background:#fff;text-align:center;cursor:pointer;-webkit-appearance:none;transition:all .15s}
+.fuel-btn.on{background:var(--g);border-color:var(--g);color:#fff}
+
+/* YN */
+.check-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--brd)}
+.check-row:last-child{border-bottom:none}
+.check-lbl{font-size:13px;font-weight:500}
+.yn{display:flex;gap:5px}
+.yn-btn{min-width:48px;min-height:48px;border:2px solid var(--brd);border-radius:8px;font-size:14px;font-weight:700;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-appearance:none;touch-action:manipulation;transition:all .15s}
+.yn-btn.y.on{background:var(--g);border-color:var(--g);color:#fff}
+.yn-btn.n.on{background:var(--r);border-color:var(--r);color:#fff}
+
+/* PHOTOS */
+.photo-counter{font-size:13px;font-weight:600;margin-bottom:8px;padding:8px 11px;border-radius:8px}
+.pc-warn{background:var(--ol);color:var(--o)}
+.pc-ok{background:var(--gl);color:var(--g)}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.pthumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--brd)}
+.pthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pdel{position:absolute;top:4px;right:4px;width:22px;height:22px;background:rgba(0,0,0,.65);color:#fff;border-radius:50%;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1}
+#photo-input{display:none}
+.btn-photo{width:100%;padding:13px;border:2px dashed var(--brd);border-radius:8px;font-size:14px;font-weight:600;color:var(--gr);background:#fff;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;-webkit-appearance:none;touch-action:manipulation}
+
+/* SIGNATURE */
+#sig-canvas{width:100%;height:150px;border:2px solid var(--brd);border-radius:8px;background:#fafaf8;touch-action:none;display:block;cursor:crosshair}
+.sig-hint{font-size:11px;color:var(--gr);text-align:center;margin:5px 0}
+.btn-clear{font-size:12px;color:var(--r);font-weight:600;padding:5px 10px;border:1.5px solid var(--r);border-radius:6px;background:#fff;cursor:pointer}
+
+/* ERROR */
+#drv-error{display:none;background:var(--rl);border:1.5px solid var(--r);color:var(--r);padding:12px 14px;border-radius:8px;font-size:13px;font-weight:600;margin:0 12px 4px}
+
+/* SUBMIT */
+.submit-wrap{padding:12px}
+.submit-btn{display:block;width:100%;min-height:58px;padding:18px;font-size:18px;font-weight:700;-webkit-appearance:none;appearance:none;background:var(--g);color:#fff;border:none;border-radius:var(--rad);touch-action:manipulation;cursor:pointer;font-family:'DM Sans',sans-serif;letter-spacing:-.3px}
+.submit-btn:active{background:var(--gd)}
+
+/* SUCCESS */
+#screen-success{min-height:100vh;background:var(--grl);padding:20px}
+.suc-card{background:#fff;border-radius:16px;padding:36px 20px;text-align:center;border:1px solid var(--brd);max-width:460px;margin:50px auto 0}
+.suc-ico{width:68px;height:68px;background:var(--gl);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:32px}
+.suc-title{font-size:21px;font-weight:700;margin-bottom:7px}
+.suc-sub{color:var(--gr);font-size:14px;margin-bottom:24px}
+.btn-fiche{display:block;width:100%;padding:15px;background:var(--g);color:#fff;border-radius:var(--rad);font-size:15px;font-weight:700;margin-bottom:10px;cursor:pointer;border:none;font-family:inherit}
+.btn-home{display:block;width:100%;padding:13px;background:var(--grl);color:var(--txt);border-radius:var(--rad);font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:inherit}
+
+/* FICHE */
+#screen-fiche{background:#fff;min-height:100vh;padding:16px;max-width:800px;margin:0 auto}
+.fiche-actions{display:flex;gap:8px;margin-bottom:16px}
+.btn-back{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;background:var(--grl);border:none;cursor:pointer;font-family:inherit}
+.btn-print{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;background:var(--g);color:#fff;border:none;cursor:pointer;font-family:inherit}
+.fiche-hd{display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--g);padding-bottom:14px;margin-bottom:18px}
+.fiche-logo{width:52px;height:52px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fiche-title{font-size:19px;font-weight:700}
+.fiche-sub{font-size:11px;color:var(--gr);margin-top:2px}
+.fsection{margin-bottom:18px}
+.fsection-title{background:var(--g);color:#fff;padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;border-radius:6px 6px 0 0}
+.fsection-body{border:1px solid var(--brd);border-top:none;border-radius:0 0 6px 6px;padding:12px}
+.ftable{width:100%;border-collapse:collapse;font-size:13px}
+.ftable td{padding:7px 9px;border:1px solid var(--brd)}
+.ftable td:first-child{font-weight:600;color:var(--gr);width:42%}
+.cdot{display:inline-flex;width:20px;height:20px;border-radius:50%;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
+.cdot-o{background:var(--g)}.cdot-n{background:var(--r)}.cdot-d{background:var(--gr)}
+.fiche-sig{max-width:240px;border:1px solid var(--brd);border-radius:6px}
+.fphotos{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.fphotos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--brd)}
+
+/* SYNC BANNER */
+.sync-banner{position:fixed;top:58px;left:0;right:0;z-index:200;background:var(--g);color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.2);animation:slideDown .3s ease}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.sync-banner button{background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600}
+
+@media print{
+  .fiche-actions{display:none!important}
+  #screen-fiche{padding:8px}
+  .fphotos img{break-inside:avoid}
+}
+@media(min-width:500px){.pgrid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spin"></div>
+  <p>Connexion en cours…</p>
+</div>
+
+<!-- ===== ADMIN ===== -->
+<div id="screen-admin">
+  <header class="a-head">
+    <div class="a-logo">
+      <div class="a-logo-ico">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 21h20L12 2z" fill="#1a6b3c"/></svg>
+      </div>
+      Triangle CI — Flotte
+    </div>
+    <span style="font-size:11px;opacity:.6;font-weight:600;letter-spacing:1px">ADMIN</span>
+  </header>
+  <nav class="a-nav">
+    <button class="a-tab on"  onclick="showTab('dashboard',this)">📊 Tableau de bord</button>
+    <button class="a-tab"     onclick="showTab('trucks',this)">🚛 Camions</button>
+    <button class="a-tab"     onclick="showTab('history',this)">📋 Historique</button>
+    <button class="a-tab"     onclick="showTab('settings',this)">⚙️ Paramètres</button>
+  </nav>
+  <div class="a-body">
+
+    <!-- DASHBOARD -->
+    <div id="t-dashboard" class="t-panel on">
+      <div class="metrics" style="margin-top:14px">
+        <div class="mc"><div class="mc-n g" id="m-free">0</div><div class="mc-l">Libres</div></div>
+        <div class="mc"><div class="mc-n b" id="m-svc">0</div><div class="mc-l">En service</div></div>
+        <div class="mc"><div class="mc-n o" id="m-late">0</div><div class="mc-l">En retard</div></div>
+      </div>
+      <div class="stitle">🚛 En service</div>
+      <div id="d-svc"><div class="empty">Chargement…</div></div>
+      <div class="stitle">✅ Disponibles</div>
+      <div id="d-free"><div class="empty">Chargement…</div></div>
+    </div>
+
+    <!-- TRUCKS -->
+    <div id="t-trucks" class="t-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0">
+        <span class="stitle" style="margin:0">Flotte complète</span>
+        <button class="btn-add" onclick="addTruck()">+ Ajouter</button>
+      </div>
+      <div class="tgrid" id="trucks-grid"></div>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="t-history" class="t-panel">
+      <div style="margin-top:14px" id="history-list"><div class="empty">Chargement…</div></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="t-settings" class="t-panel">
+      <div style="margin-top:14px">
+        <p style="color:var(--gr);font-size:13px;margin-bottom:18px">Configuration EmailJS pour les alertes de retard.</p>
+        <div class="sf">
+          <div class="fg"><label class="fl">Service ID</label><input class="fi" id="cfg-sid" placeholder="service_xxxxxxx"></div>
+          <div class="fg"><label class="fl">Template ID</label><input class="fi" id="cfg-tid" placeholder="template_xxxxxxx"></div>
+          <div class="fg"><label class="fl">Public Key</label><input class="fi" id="cfg-key" placeholder="XXXXXXXXXXXXXXX"></div>
+          <div class="fg"><label class="fl">Email direction</label><input class="fi" id="cfg-mail" type="email" placeholder="direction@triangle.fr"></div>
+          <button class="btn-g" onclick="saveSettings()">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TRUCK -->
+<div class="modal-bg" id="truck-modal">
+  <div class="modal">
+    <div class="m-head">
+      <span class="m-title" id="modal-title">Camion</span>
+      <button class="m-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="m-body">
+      <div class="fg"><label class="fl">Nom</label><input class="fi" id="edit-name" placeholder="Ex: Transit #1"></div>
+      <div class="fg"><label class="fl">Marque / Modèle</label><input class="fi" id="edit-model" placeholder="Ex: Ford Transit 350L"></div>
+      <div class="fg"><label class="fl">Immatriculation</label><input class="fi" id="edit-plate" placeholder="Ex: AB-123-CD" oninput="this.value=this.value.toUpperCase()"></div>
+      <div class="qr-wrap" id="qr-box"><p style="font-size:12px;color:var(--gr);padding:16px">QR code après sauvegarde</p></div>
+      <p class="qr-info" id="qr-info"></p>
+      <button class="btn-print-qr" id="btn-qr" style="display:none" onclick="printQR()">🖨️ Imprimer QR code</button>
+    </div>
+    <div class="m-foot">
+      <button class="btn-r"  onclick="deleteTruck()">Supprimer</button>
+      <button class="btn-gr" onclick="closeModal()">Annuler</button>
+      <button class="btn-g"  onclick="saveTruck()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DRIVER ===== -->
+<div id="screen-driver">
+  <div class="d-head">
+    <div class="d-ref">Triangle Chaudronnerie Industrielle — PROC-02</div>
+    <div class="d-num"  id="d-num">#1</div>
+    <div class="d-name" id="d-name">Camion</div>
+    <div class="d-meta" id="d-meta">—</div>
+    <span class="d-typebadge" id="d-badge">🚚 Livraison — Prise en charge</span>
+  </div>
+
+  <!-- PROC-02 -->
+  <div class="proc">
+    <div class="proc-head">📋 Conditions d'utilisation — PROC-02 V2.0</div>
+    <div class="proc-body">
+      <div class="proc-alerte">■ Tous les véhicules doivent être restitués sur le site de <strong>Dechy chaque vendredi avant fin de journée</strong>. Ils sont repris le lundi matin. <strong>Aucun véhicule ne doit stationner au domicile d'un employé le week-end</strong> sans autorisation écrite de la Direction.</div>
+      <div class="proc-sub">3. Remise – Lundi matin</div>
+      <ul class="proc-steps">
+        <li><span class="snum">1</span>Signature du registre de remise des clés — Conducteur + Responsable</li>
+        <li><span class="snum">2</span>Remise de la clé du véhicule attribué — Responsable</li>
+        <li><span class="snum">3</span>Réalisation de l'état des lieux – section LIVRAISON — Conducteur + Responsable</li>
+        <li><span class="snum">4</span>Vérification caméra embarquée et GPS actifs — Conducteur</li>
+        <li><span class="snum">5</span>Signature de la fiche état des lieux — Conducteur + Responsable</li>
+        <li><span class="snum">6</span>Départ autorisé après validation — Responsable</li>
+      </ul>
+      <div class="proc-sub">4. Restitution – Vendredi fin de journée</div>
+      <ul class="proc-steps">
+        <li><span class="snum">1</span>Retour du véhicule propre sur le parking de Dechy — Conducteur</li>
+        <li><span class="snum">2</span>Réalisation de l'état des lieux – section RETOUR — Conducteur + Responsable</li>
+        <li><span class="snum">3</span>Consignation de toutes les anomalies constatées — Conducteur + Responsable</li>
+        <li><span class="snum">4</span>Signature de la fiche état des lieux — Conducteur + Responsable</li>
+        <li><span class="snum">5</span>Remise de la clé, rangement sur crochet numéroté — Conducteur → Responsable</li>
+        <li><span class="snum">6</span>Vérification de toutes les clés, verrouillage armoire — Responsable</li>
+      </ul>
+      <div class="proc-warn">⛔ La désactivation ou neutralisation intentionnelle du GPS ou des caméras embarquées est formellement <strong>INTERDITE</strong> et constitue une <strong>faute grave</strong>. Des sanctions disciplinaires pourront être prononcées.</div>
+    </div>
+  </div>
+
+  <div id="drv-error"></div>
+
+  <form id="driver-form" onsubmit="handleSubmit(event)">
+    <!-- Identification -->
+    <div class="fsec">
+      <div class="fsec-head">👤 Identification</div>
+      <div class="fsec-body">
+        <div class="frow"><label class="flabel">Marque / Modèle</label><div class="fro" id="d-model">—</div></div>
+        <div class="frow"><label class="flabel">Immatriculation</label><div class="fro" id="d-plate">—</div></div>
+        <div class="frow">
+          <label class="flabel req">Conducteur</label>
+          <input class="finput" type="text" id="f-conductor" placeholder="Prénom Nom" autocomplete="name">
+        </div>
+      </div>
+    </div>
+
+    <!-- État des lieux -->
+    <div class="fsec">
+      <div class="fsec-head" id="edl-head">📏 État des lieux — À la livraison</div>
+      <div class="fsec-body">
+        <div class="frow">
+          <label class="flabel req">Kilométrage (km)</label>
+          <input class="finput" type="number" id="f-km" placeholder="Ex: 45230" min="0" inputmode="numeric">
+        </div>
+        <div class="frow">
+          <label class="flabel">Niveau de carburant</label>
+          <div class="fuel-row">
+            <button type="button" class="fuel-btn" data-v="0"     onclick="pickFuel(this)">0</button>
+            <button type="button" class="fuel-btn" data-v="1/4"   onclick="pickFuel(this)">1/4</button>
+            <button type="button" class="fuel-btn" data-v="1/2"   onclick="pickFuel(this)">1/2</button>
+            <button type="button" class="fuel-btn" data-v="3/4"   onclick="pickFuel(this)">3/4</button>
+            <button type="button" class="fuel-btn" data-v="Plein" onclick="pickFuel(this)">Plein</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contrôles -->
+    <div class="fsec">
+      <div class="fsec-head">🔧 Contrôles techniques</div>
+      <div class="fsec-body">
+        <div class="check-row"><span class="check-lbl">Pneu AV bon état</span><div class="yn"><button type="button" class="yn-btn y" data-k="pneuAV" data-v="O" onclick="pickYN(this)">O</button><button type="button" class="yn-btn n" data-k="pneuAV" data-v="N" onclick="pickYN(this)">N</button></div></div>
+        <div class="check-row"><span class="check-lbl">Pneu AR bon état</span><div class="yn"><button type="button" class="yn-btn y" data-k="pneuAR" data-v="O" onclick="pickYN(this)">O</button><button type="button" class="yn-btn n" data-k="pneuAR" data-v="N" onclick="pickYN(this)">N</button></div></div>
+        <div class="check-row"><span class="check-lbl">Roue de secours</span><div class="yn"><button type="button" class="yn-btn y" data-k="secours" data-v="O" onclick="pickYN(this)">O</button><button type="button" class="yn-btn n" data-k="secours" data-v="N" onclick="pickYN(this)">N</button></div></div>
+        <div class="check-row"><span class="check-lbl">Intérieur bon état</span><div class="yn"><button type="button" class="yn-btn y" data-k="interieur" data-v="O" onclick="pickYN(this)">O</button><button type="button" class="yn-btn n" data-k="interieur" data-v="N" onclick="pickYN(this)">N</button></div></div>
+      </div>
+    </div>
+
+    <!-- Observations -->
+    <div class="fsec">
+      <div class="fsec-head">📝 Observations</div>
+      <div class="fsec-body">
+        <div class="frow">
+          <label class="flabel">Observations libres</label>
+          <textarea class="finput" id="f-obs" rows="3" placeholder="Anomalies, remarques…" style="resize:vertical"></textarea>
+        </div>
+        <div id="delivery-fields">
+          <div class="frow">
+            <label class="flabel req">Destination / Chantier</label>
+            <input class="finput" type="text" id="f-dest" placeholder="Ex: Chantier Valenciennes">
+          </div>
+          <div class="frow">
+            <label class="flabel">Retour prévu le</label>
+            <input class="finput" type="datetime-local" id="f-return">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Photos -->
+    <div class="fsec" id="photos-sec">
+      <div class="fsec-head">📷 Photos du véhicule <span style="font-weight:400;font-size:11px">(minimum 4)</span></div>
+      <div class="fsec-body">
+        <div class="photo-counter pc-warn" id="photo-ctr">0 photo — encore 4 requises</div>
+        <input type="file" id="photo-input" accept="image/*" multiple capture="environment" onchange="onPhotos(this)">
+        <button type="button" class="btn-photo" onclick="document.getElementById('photo-input').click()">📷 Ajouter des photos</button>
+        <div class="pgrid" id="pgrid"></div>
+      </div>
+    </div>
+
+    <!-- Signature -->
+    <div class="fsec" id="sig-sec">
+      <div class="fsec-head">✍️ Signature</div>
+      <div class="fsec-body">
+        <div class="frow"><label class="flabel">Date</label><div class="fro" id="sig-date">—</div></div>
+        <div class="frow">
+          <label class="flabel req">L'employé (nom)</label>
+          <input class="finput" type="text" id="f-employe" placeholder="Prénom Nom">
+        </div>
+        <div class="frow">
+          <label class="flabel">Signature tactile</label>
+          <canvas id="sig-canvas"></canvas>
+          <p class="sig-hint">Dessinez avec le doigt ou la souris</p>
+          <button type="button" class="btn-clear" onclick="clearSig()">Effacer</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="submit-wrap">
+      <input type="submit" class="submit-btn" value="✅ Valider la fiche">
+    </div>
+  </form>
+</div>
+
+<!-- ===== SUCCESS ===== -->
+<div id="screen-success">
+  <div class="suc-card">
+    <div class="suc-ico">✅</div>
+    <div class="suc-title">Fiche enregistrée !</div>
+    <div class="suc-sub" id="suc-sub">La fiche a été sauvegardée et synchronisée.</div>
+    <button class="btn-fiche" onclick="goFiche()">📄 Voir / Imprimer la fiche</button>
+    <button class="btn-home"  onclick="location.href=location.pathname">Retour accueil</button>
+  </div>
+</div>
+
+<!-- ===== FICHE ===== -->
+<div id="screen-fiche">
+  <div class="fiche-actions">
+    <button class="btn-back"  onclick="backFromFiche()">← Retour</button>
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimer / PDF</button>
+  </div>
+  <div class="fiche-hd">
+    <div class="fiche-logo">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M12 2L2 21h20L12 2z"/></svg>
+    </div>
+    <div>
+      <div class="fiche-title">Triangle Chaudronnerie Industrielle</div>
+      <div class="fiche-sub">FICHE ÉTAT DES LIEUX — PROC-02 V2.0 | Avril 2026</div>
+    </div>
+  </div>
+  <div id="fiche-content"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  FIREBASE CONFIG
+// ═══════════════════════════════════════════════════
+var firebaseConfig = {
+  apiKey:            "AIzaSyBYYCelsusDT0qEGKdmYa2Cop-v2uZSJME",
+  authDomain:        "flotte-triangle.firebaseapp.com",
+  databaseURL:       "https://flotte-triangle-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "flotte-triangle",
+  storageBucket:     "flotte-triangle.firebasestorage.app",
+  messagingSenderId: "226293170947",
+  appId:             "1:226293170947:web:bdc32a160185410147df36"
+};
+firebase.initializeApp(firebaseConfig);
+var DB = firebase.database();
+
+// ═══════════════════════════════════════════════════
+//  URL PARAMS
+// ═══════════════════════════════════════════════════
+var UP        = new URLSearchParams(window.location.search);
+var pC        = UP.get('c');
+var pN        = UP.get('n');
+var pM        = UP.get('m');
+var pP        = UP.get('p');
+var pS        = UP.get('s');
+var IS_DRIVER = !!pC;
+
+// ═══════════════════════════════════════════════════
+//  ÉTAT GLOBAL
+// ═══════════════════════════════════════════════════
+var photos      = [];
+var fuelVal     = '';
+var checks      = {pneuAV:null, pneuAR:null, secours:null, interieur:null};
+var isDelivery  = true;
+var sigCanvas, sigCtx, sigDrawing = false, sigTouched = false;
+var currentLog  = null;
+var editingId   = null;
+var fromAdmin   = false;
+var allTrucks   = {};   // snapshot temps réel
+var allLogs     = {};   // snapshot temps réel
+
+// ═══════════════════════════════════════════════════
+//  ÉCRANS
+// ═══════════════════════════════════════════════════
+function show(id) {
+  var ids = ['screen-admin','screen-driver','screen-success','screen-fiche'];
+  for(var i=0;i<ids.length;i++){
+    document.getElementById(ids[i]).style.display = ids[i]===id ? 'block' : 'none';
+  }
+  window.scrollTo(0,0);
+}
+
+function hideLoading() {
+  document.getElementById('loading').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════
+window.addEventListener('load', function() {
+  if(IS_DRIVER) {
+    initDriver();
+  } else {
+    initAdmin();
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  ADMIN
+// ═══════════════════════════════════════════════════
+function initAdmin() {
+  // Écoute en temps réel des camions
+  DB.ref('trucks').on('value', function(snap) {
+    allTrucks = snap.val() || {};
+    // Si pas de camions, créer les 25 par défaut
+    if(Object.keys(allTrucks).length === 0) {
+      createDefaultTrucks();
+      return;
+    }
+    renderDash();
+    renderGrid();
+  });
+
+  // Écoute en temps réel des fiches
+  DB.ref('logs').on('value', function(snap) {
+    allLogs = snap.val() || {};
+    renderHistory();
+  });
+
+  // Afficher admin après 1.5s max (même si Firebase lent)
+  setTimeout(function() {
+    hideLoading();
+    show('screen-admin');
+    loadSettingsUI();
+  }, 800);
+}
+
+function createDefaultTrucks() {
+  var updates = {};
+  for(var i=1;i<=25;i++) {
+    updates['trucks/'+i] = {
+      id:i, name:'Camion #'+i, model:'', plate:'',
+      status:'free', driver:'', destination:'', since:null, expectedReturn:null
+    };
+  }
+  DB.ref().update(updates);
+}
+
+// ─── Tabs ────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.t-panel').forEach(function(p){ p.classList.remove('on'); });
+  document.querySelectorAll('.a-tab').forEach(function(b){ b.classList.remove('on'); });
+  document.getElementById('t-'+name).classList.add('on');
+  btn.classList.add('on');
+}
+
+// ─── Dashboard ──────────────────────────────────────
+function renderDash() {
+  var trucks = Object.values(allTrucks);
+  var now = new Date();
+  var free=0, svc=0, late=0;
+  trucks.forEach(function(t) {
+    if(t.status==='service' && t.expectedReturn && new Date(t.expectedReturn)<now) {
+      t.status='late';
+      DB.ref('trucks/'+t.id+'/status').set('late');
+    }
+    if(t.status==='free') free++;
+    else if(t.status==='service') svc++;
+    else late++;
+  });
+  document.getElementById('m-free').textContent = free;
+  document.getElementById('m-svc').textContent  = svc;
+  document.getElementById('m-late').textContent = late;
+
+  var inSvc = trucks.filter(function(t){ return t.status==='service'||t.status==='late'; });
+  var dSvc  = document.getElementById('d-svc');
+  if(inSvc.length===0) {
+    dSvc.innerHTML = '<div class="empty">Aucun véhicule en service</div>';
+  } else {
+    dSvc.innerHTML = inSvc.map(function(t) {
+      var late = t.status==='late';
+      var ret  = t.expectedReturn ? new Date(t.expectedReturn).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+      return '<div class="trow">'
+        +'<div class="trow-ico" style="background:'+(late?'var(--ol)':'var(--bl)')+'">🚛</div>'
+        +'<div class="trow-info"><div class="trow-name">'+esc(t.name)+'</div>'
+        +'<div class="trow-sub">'+esc(t.driver||'—')+' · '+esc(t.destination||'—')+' · Retour: '+ret+'</div></div>'
+        +'<span class="badge '+(late?'badge-late':'badge-svc')+'">'+(late?'En retard':'En service')+'</span>'
+        +'</div>';
+    }).join('');
+  }
+
+  var avail = trucks.filter(function(t){ return t.status==='free'; });
+  var dFree = document.getElementById('d-free');
+  if(avail.length===0) {
+    dFree.innerHTML = '<div class="empty">Aucun véhicule disponible</div>';
+  } else {
+    dFree.innerHTML = avail.map(function(t) {
+      return '<div class="trow">'
+        +'<div class="trow-ico" style="background:var(--gl)">🟢</div>'
+        +'<div class="trow-info"><div class="trow-name">'+esc(t.name)+'</div>'
+        +'<div class="trow-sub">'+(t.model||'Non configuré')+' · '+(t.plate||'—')+'</div></div>'
+        +'<span class="badge badge-free">Libre</span>'
+        +'</div>';
+    }).join('');
+  }
+}
+
+// ─── Grille camions ──────────────────────────────────
+function renderGrid() {
+  var trucks = Object.values(allTrucks).sort(function(a,b){ return a.id-b.id; });
+  var g = document.getElementById('trucks-grid');
+  if(trucks.length===0){ g.innerHTML='<div class="empty">Aucun camion</div>'; return; }
+  g.innerHTML = trucks.map(function(t) {
+    var sc = t.status==='free'?'g':t.status==='service'?'b':'o';
+    var sl = t.status==='free'?'Libre':t.status==='service'?'En service':'En retard';
+    return '<div class="tcard" onclick="openModal('+t.id+')">'
+      +'<div class="tcard-num">#'+t.id+'</div>'
+      +'<div class="tcard-name">'+esc(t.name)+'</div>'
+      +'<div class="tcard-st '+sc+'"><span class="dot dot-'+sc+'"></span>'+sl+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+// ─── Historique ─────────────────────────────────────
+function renderHistory() {
+  var logs  = Object.values(allLogs).sort(function(a,b){ return b.timestamp-a.timestamp; });
+  var el    = document.getElementById('history-list');
+  if(logs.length===0){ el.innerHTML='<div class="empty">Aucune fiche enregistrée</div>'; return; }
+  el.innerHTML = logs.map(function(log) {
+    var thumbs  = (log.photos||[]).slice(0,2).map(function(p){ return '<img src="'+p+'" alt="">'; }).join('');
+    var typeStr = log.type==='delivery'?'Livraison':'Retour';
+    return '<div class="lcard">'
+      +'<div class="lthumbs">'+thumbs+'</div>'
+      +'<div class="linfo"><div class="lname">'+esc(log.truckName||'—')+' — '+typeStr+'</div>'
+      +'<div class="lsub">'+esc(log.driver||'—')+' · '+(log.dateStr||'—')+'</div></div>'
+      +'<button class="btn-voir" onclick="adminViewLog(\''+log.id+'\')">Voir / Imprimer</button>'
+      +'</div>';
+  }).join('');
+}
+
+function adminViewLog(id) {
+  var log = allLogs[id];
+  if(!log){ alert('Fiche introuvable'); return; }
+  currentLog = log;
+  fromAdmin  = true;
+  renderFiche(log);
+  show('screen-fiche');
+}
+
+// ─── Modal camion ────────────────────────────────────
+function openModal(id) {
+  editingId = id;
+  var t = allTrucks[id];
+  if(!t) return;
+  document.getElementById('modal-title').textContent = t.name;
+  document.getElementById('edit-name').value  = t.name  || '';
+  document.getElementById('edit-model').value = t.model || '';
+  document.getElementById('edit-plate').value = t.plate || '';
+  document.getElementById('qr-box').innerHTML = '<p style="font-size:12px;color:var(--gr);padding:16px">QR code après sauvegarde</p>';
+  document.getElementById('qr-info').textContent = '';
+  document.getElementById('btn-qr').style.display = 'none';
+  if(t.model && t.plate) genQR(t);
+  document.getElementById('truck-modal').classList.add('on');
+}
+
+function closeModal() {
+  document.getElementById('truck-modal').classList.remove('on');
+  editingId = null;
+}
+
+function saveTruck() {
+  if(editingId===null) return;
+  var data = {
+    id:     editingId,
+    name:   document.getElementById('edit-name').value.trim()  || ('Camion #'+editingId),
+    model:  document.getElementById('edit-model').value.trim(),
+    plate:  document.getElementById('edit-plate').value.trim().toUpperCase(),
+    status: (allTrucks[editingId]||{}).status || 'free',
+    driver: (allTrucks[editingId]||{}).driver || '',
+    destination:    (allTrucks[editingId]||{}).destination    || '',
+    since:          (allTrucks[editingId]||{}).since          || null,
+    expectedReturn: (allTrucks[editingId]||{}).expectedReturn || null
+  };
+  DB.ref('trucks/'+editingId).set(data).then(function() {
+    genQR(data);
+    document.getElementById('modal-title').textContent = data.name;
+  });
+}
+
+function deleteTruck() {
+  if(!confirm('Supprimer ce camion ?')) return;
+  DB.ref('trucks/'+editingId).remove();
+  closeModal();
+}
+
+function addTruck() {
+  var ids = Object.keys(allTrucks).map(Number);
+  var newId = ids.length > 0 ? Math.max.apply(null,ids)+1 : 1;
+  var data = {id:newId,name:'Camion #'+newId,model:'',plate:'',status:'free',driver:'',destination:'',since:null,expectedReturn:null};
+  DB.ref('trucks/'+newId).set(data).then(function(){ openModal(newId); });
+}
+
+// ─── QR Code ────────────────────────────────────────
+function genQR(t) {
+  var base = location.origin + location.pathname;
+  var url  = base+'?c='+t.id+'&n='+encodeURIComponent(t.name)+'&m='+encodeURIComponent(t.model)+'&p='+encodeURIComponent(t.plate)+'&s='+t.status;
+  var box  = document.getElementById('qr-box');
+  box.innerHTML = '';
+  new QRCode(box, {text:url, width:180, height:180, correctLevel:QRCode.CorrectLevel.M});
+  document.getElementById('qr-info').textContent = url.length>70 ? url.slice(0,70)+'…' : url;
+  var btn = document.getElementById('btn-qr');
+  btn.style.display = 'flex';
+  btn.dataset.url   = url;
+  btn.dataset.name  = t.name;
+  btn.dataset.plate = t.plate;
+}
+
+function printQR() {
+  var btn   = document.getElementById('btn-qr');
+  var url   = btn.dataset.url;
+  var name  = btn.dataset.name;
+  var plate = btn.dataset.plate;
+  var w = window.open('','_blank','width=500,height=640');
+  w.document.write('<!DOCTYPE html><html><head><title>QR '+name+'</title>'
+    +'<style>body{font-family:system-ui;text-align:center;padding:28px;background:#fff}'
+    +'h2{color:#1a6b3c;font-size:21px;margin-bottom:3px}p{color:#666;font-size:13px;margin-bottom:18px}'
+    +'.wrap{display:inline-block;padding:14px;border:2px solid #e0e0d8;border-radius:10px}'
+    +'.info{margin-top:14px;font-size:10px;color:#999;font-family:monospace;word-break:break-all}'
+    +'@media print{button{display:none!important}}</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>'
+    +'</head><body>'
+    +'<h2>🚛 '+name+'</h2>'
+    +'<p>Immatriculation : <strong>'+(plate||'—')+'</strong></p>'
+    +'<div class="wrap"><div id="qr"></div></div>'
+    +'<div class="info">'+url+'</div><br>'
+    +'<button onclick="window.print()" style="margin-top:16px;padding:11px 22px;background:#1a6b3c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">🖨️ Imprimer</button>'
+    +'<script>new QRCode(document.getElementById("qr"),{text:'+JSON.stringify(url)+',width:210,height:210});<\/script>'
+    +'</body></html>');
+  w.document.close();
+}
+
+// ─── Settings ────────────────────────────────────────
+function saveSettings() {
+  var s = {
+    serviceId:  document.getElementById('cfg-sid').value.trim(),
+    templateId: document.getElementById('cfg-tid').value.trim(),
+    pubKey:     document.getElementById('cfg-key').value.trim(),
+    email:      document.getElementById('cfg-mail').value.trim()
+  };
+  DB.ref('settings').set(s).then(function(){ alert('Paramètres enregistrés !'); });
+}
+
+function loadSettingsUI() {
+  DB.ref('settings').once('value', function(snap) {
+    var s = snap.val() || {};
+    if(s.serviceId)  document.getElementById('cfg-sid').value  = s.serviceId;
+    if(s.templateId) document.getElementById('cfg-tid').value  = s.templateId;
+    if(s.pubKey)     document.getElementById('cfg-key').value  = s.pubKey;
+    if(s.email)      document.getElementById('cfg-mail').value = s.email;
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  DRIVER
+// ═══════════════════════════════════════════════════
+function initDriver() {
+  hideLoading();
+  show('screen-driver');
+
+  var truckId    = parseInt(pC,10);
+  var truckName  = dec(pN)||'Camion';
+  var truckModel = dec(pM)||'';
+  var truckPlate = dec(pP)||'';
+
+  // Lire le vrai statut depuis Firebase
+  DB.ref('trucks/'+truckId).once('value', function(snap) {
+    var t = snap.val();
+    var status = t ? t.status : (pS||'free');
+    isDelivery = (status==='free'||status==='late');
+    setupDriverUI(truckId, truckName, truckModel, truckPlate);
+  });
+}
+
+function setupDriverUI(truckId, truckName, truckModel, truckPlate) {
+  document.getElementById('d-num').textContent   = '#'+truckId;
+  document.getElementById('d-name').textContent  = truckName;
+  document.getElementById('d-meta').textContent  = [truckModel,truckPlate].filter(Boolean).join(' — ')||'—';
+  document.getElementById('d-model').textContent = truckModel||'—';
+  document.getElementById('d-plate').textContent = truckPlate||'—';
+
+  var badge = document.getElementById('d-badge');
+  var edlH  = document.getElementById('edl-head');
+  var delF  = document.getElementById('delivery-fields');
+
+  if(isDelivery) {
+    badge.textContent = '🚚 Livraison — Prise en charge';
+    badge.className   = 'd-typebadge tb-liv';
+    edlH.textContent  = '📏 État des lieux — À la livraison';
+    delF.style.display= 'block';
+  } else {
+    badge.textContent = '🏁 Retour — Restitution';
+    badge.className   = 'd-typebadge tb-ret';
+    edlH.textContent  = '📏 État des lieux — Au retour';
+    delF.style.display= 'none';
+  }
+
+  document.getElementById('sig-date').textContent =
+    new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+
+  setTimeout(initSig, 200);
+}
+
+// ─── Carburant ───────────────────────────────────────
+function pickFuel(btn) {
+  document.querySelectorAll('.fuel-btn').forEach(function(b){ b.classList.remove('on'); });
+  btn.classList.add('on');
+  fuelVal = btn.dataset.v;
+}
+
+// ─── O/N ─────────────────────────────────────────────
+function pickYN(btn) {
+  var k = btn.dataset.k;
+  document.querySelectorAll('[data-k="'+k+'"]').forEach(function(b){ b.classList.remove('on'); });
+  btn.classList.add('on');
+  checks[k] = btn.dataset.v;
+}
+
+// ─── Photos ──────────────────────────────────────────
+function compressImg(dataUrl, cb) {
+  var img = new Image();
+  img.onload = function() {
+    var MAX=800, w=img.width, h=img.height;
+    if(w>h){ if(w>MAX){ h=Math.round(h*MAX/w); w=MAX; } }
+    else   { if(h>MAX){ w=Math.round(w*MAX/h); h=MAX; } }
+    var c=document.createElement('canvas');
+    c.width=w; c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);
+    cb(c.toDataURL('image/jpeg',0.55));
+  };
+  img.src = dataUrl;
+}
+
+function onPhotos(input) {
+  var files = Array.from(input.files);
+  files.forEach(function(file) {
+    var r = new FileReader();
+    r.onload = function(e) {
+      compressImg(e.target.result, function(c){ photos.push(c); renderPhotos(); });
+    };
+    r.readAsDataURL(file);
+  });
+  input.value='';
+}
+
+function renderPhotos() {
+  var cnt  = photos.length;
+  var need = Math.max(0,4-cnt);
+  var ctr  = document.getElementById('photo-ctr');
+  ctr.textContent = cnt+' photo'+(cnt>1?'s':'')+(need>0?' — encore '+need+' requise'+(need>1?'s':''):'  ✓ Minimum atteint');
+  ctr.className   = 'photo-counter '+(cnt>=4?'pc-ok':'pc-warn');
+  document.getElementById('pgrid').innerHTML = photos.map(function(p,i){
+    return '<div class="pthumb"><img src="'+p+'"><button type="button" class="pdel" onclick="delPhoto('+i+')">×</button></div>';
+  }).join('');
+}
+
+function delPhoto(i){ photos.splice(i,1); renderPhotos(); }
+
+// ─── Signature ───────────────────────────────────────
+function initSig() {
+  sigCanvas = document.getElementById('sig-canvas');
+  if(!sigCanvas) return;
+  sigCtx = sigCanvas.getContext('2d');
+  var W   = sigCanvas.offsetWidth||300;
+  var DPR = window.devicePixelRatio||1;
+  sigCanvas.width  = W*DPR;
+  sigCanvas.height = 150*DPR;
+  sigCtx.setTransform(DPR,0,0,DPR,0,0);
+  sigCtx.strokeStyle='#1a1a18'; sigCtx.lineWidth=2.5; sigCtx.lineCap='round'; sigCtx.lineJoin='round';
+
+  function pos(e){ var r=sigCanvas.getBoundingClientRect(); var ev=e.touches?e.touches[0]:e; return{x:ev.clientX-r.left,y:ev.clientY-r.top}; }
+  function start(e){ e.preventDefault(); sigDrawing=true; var p=pos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y); }
+  function move(e) { e.preventDefault(); if(!sigDrawing)return; var p=pos(e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); sigTouched=true; }
+  function end()   { sigDrawing=false; }
+
+  sigCanvas.addEventListener('mousedown',start);
+  sigCanvas.addEventListener('mousemove',move);
+  sigCanvas.addEventListener('mouseup',end);
+  sigCanvas.addEventListener('mouseleave',end);
+  sigCanvas.addEventListener('touchstart',start,{passive:false});
+  sigCanvas.addEventListener('touchmove',move,{passive:false});
+  sigCanvas.addEventListener('touchend',end);
+}
+
+function clearSig() {
+  if(!sigCtx)return;
+  sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height);
+  sigTouched=false;
+}
+
+// ─── Erreur ──────────────────────────────────────────
+function showErr(msg) {
+  var el=document.getElementById('drv-error');
+  el.textContent='⚠️ '+msg;
+  el.style.display='block';
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function hideErr(){ document.getElementById('drv-error').style.display='none'; }
+
+// ─── SUBMIT ──────────────────────────────────────────
+function handleSubmit(e) {
+  e.preventDefault();
+  hideErr();
+
+  var conductor = document.getElementById('f-conductor').value.trim();
+  var km        = document.getElementById('f-km').value.trim();
+  var employe   = document.getElementById('f-employe').value.trim();
+  var dest      = isDelivery ? document.getElementById('f-dest').value.trim() : '';
+  var retour    = isDelivery ? document.getElementById('f-return').value : '';
+  var obs       = document.getElementById('f-obs').value.trim();
+
+  if(!conductor){ showErr('Le nom du conducteur est obligatoire.'); document.getElementById('f-conductor').focus(); return; }
+  if(!km)       { showErr('Le kilométrage est obligatoire.');       document.getElementById('f-km').focus();        return; }
+  if(!employe)  { showErr("Le nom de l'employé est obligatoire.");  document.getElementById('f-employe').focus();   return; }
+  if(isDelivery && !dest){ showErr('La destination est obligatoire.'); document.getElementById('f-dest').focus(); return; }
+
+  if(photos.length<4){
+    if(!confirm('Seulement '+photos.length+' photo(s) sur 4 requises.\nContinuer quand même ?')){
+      document.getElementById('photos-sec').scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+  }
+  if(!sigTouched){
+    if(!confirm('Aucune signature dessinée.\nContinuer quand même ?')){
+      document.getElementById('sig-sec').scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+  }
+
+  // Désactiver le bouton pendant la sauvegarde
+  var submitBtn = document.querySelector('.submit-btn');
+  submitBtn.value    = '⏳ Enregistrement…';
+  submitBtn.disabled = true;
+
+  var now   = new Date();
+  var logId = 'log_'+now.getTime();
+  var truckId = parseInt(pC,10);
+
+  var log = {
+    id:             logId,
+    truckId:        truckId,
+    truckName:      dec(pN)||'Camion',
+    truckPlate:     dec(pP)||'',
+    type:           isDelivery?'delivery':'return',
+    driver:         conductor,
+    employe:        employe,
+    marque:         dec(pM)||'',
+    immat:          dec(pP)||'',
+    km:             parseInt(km,10),
+    fuel:           fuelVal,
+    obs:            obs,
+    destination:    dest,
+    expectedReturn: retour,
+    checks:         {pneuAV:checks.pneuAV,pneuAR:checks.pneuAR,secours:checks.secours,interieur:checks.interieur},
+    photos:         photos.slice(),
+    signature:      sigCanvas ? sigCanvas.toDataURL('image/png') : '',
+    date:           now.toISOString(),
+    dateStr:        now.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+    timestamp:      now.getTime()
+  };
+
+  // Sauvegarde Firebase
+  var updates = {};
+  updates['logs/'+logId] = log;
+
+  // Mise à jour statut camion
+  if(isDelivery) {
+    updates['trucks/'+truckId+'/status']         = 'service';
+    updates['trucks/'+truckId+'/driver']         = conductor;
+    updates['trucks/'+truckId+'/destination']    = dest;
+    updates['trucks/'+truckId+'/since']          = now.toISOString();
+    updates['trucks/'+truckId+'/expectedReturn'] = retour||null;
+  } else {
+    updates['trucks/'+truckId+'/status']         = 'free';
+    updates['trucks/'+truckId+'/driver']         = '';
+    updates['trucks/'+truckId+'/destination']    = '';
+    updates['trucks/'+truckId+'/since']          = null;
+    updates['trucks/'+truckId+'/expectedReturn'] = null;
+  }
+
+  DB.ref().update(updates)
+    .then(function() {
+      currentLog = log;
+      fromAdmin  = false;
+      document.getElementById('suc-sub').textContent =
+        'Fiche '+(isDelivery?'de livraison':'de retour')+' enregistrée et synchronisée — '+log.dateStr;
+      show('screen-success');
+    })
+    .catch(function(err) {
+      submitBtn.value    = '✅ Valider la fiche';
+      submitBtn.disabled = false;
+      showErr('Erreur de sauvegarde : '+err.message+'. Vérifiez votre connexion internet.');
+    });
+}
+
+// ═══════════════════════════════════════════════════
+//  FICHE
+// ═══════════════════════════════════════════════════
+function goFiche() {
+  if(!currentLog){ alert('Aucune fiche disponible'); return; }
+  renderFiche(currentLog);
+  show('screen-fiche');
+}
+
+function backFromFiche() {
+  if(fromAdmin){ show('screen-admin'); }
+  else         { show('screen-success'); }
+}
+
+function cdot(v) {
+  if(v==='O') return '<span class="cdot cdot-o">O</span>';
+  if(v==='N') return '<span class="cdot cdot-n">N</span>';
+  return '<span class="cdot cdot-d">—</span>';
+}
+
+function renderFiche(log) {
+  var typeStr = log.type==='delivery'?'Livraison — Prise en charge':'Retour — Restitution';
+  var html =
+    sec('Identification',
+      tab([['Marque / Modèle', esc(log.marque||'—')],
+           ['Immatriculation', esc(log.immat||'—')],
+           ['Conducteur',      esc(log.driver)],
+           ['Type',            '<strong>'+typeStr+'</strong>'],
+           ['Date',            esc(log.dateStr)]])
+    )
+    +sec('État des lieux',
+      tab([['Kilométrage', log.km?log.km.toLocaleString('fr-FR')+' km':'—'],
+           ['Carburant',   log.fuel||'—']])
+    )
+    +sec('Contrôles techniques',
+      tab([['Pneu AV bon état',  cdot(log.checks.pneuAV)],
+           ['Pneu AR bon état',  cdot(log.checks.pneuAR)],
+           ['Roue de secours',   cdot(log.checks.secours)],
+           ['Intérieur bon état',cdot(log.checks.interieur)]])
+    );
+
+  if(log.obs||log.destination) {
+    var body = '';
+    if(log.obs) body += '<p style="font-size:13px;margin-bottom:10px">'+esc(log.obs)+'</p>';
+    if(log.destination) {
+      var rows = [['Destination / Chantier','<strong>'+esc(log.destination)+'</strong>']];
+      if(log.expectedReturn) rows.push(['Retour prévu', new Date(log.expectedReturn).toLocaleString('fr-FR')]);
+      body += tab(rows);
+    }
+    html += sec('Observations'+(log.type==='delivery'?' & Destination':''), body);
+  }
+
+  html += sec('Signature',
+    '<p style="font-size:12px;color:var(--gr);margin-bottom:8px">L\'employé : <strong>'+esc(log.employe||'—')+'</strong></p>'
+    +(log.signature?'<img class="fiche-sig" src="'+log.signature+'" alt="Signature">':'<p style="font-size:12px;color:var(--gr)">Pas de signature</p>')
+    +'<p style="font-size:11px;color:var(--gr);margin-top:8px">Fait à Dechy, le '+esc(log.dateStr)+'</p>'
+  );
+
+  if(log.photos&&log.photos.length>0) {
+    html += sec('Photos ('+log.photos.length+')',
+      '<div class="fphotos">'+log.photos.map(function(p){ return '<img src="'+p+'" alt="">'; }).join('')+'</div>'
+    );
+  }
+
+  document.getElementById('fiche-content').innerHTML = html;
+}
+
+function sec(title, body) {
+  return '<div class="fsection"><div class="fsection-title">'+title+'</div><div class="fsection-body">'+body+'</div></div>';
+}
+function tab(rows) {
+  return '<table class="ftable">'+rows.map(function(r){ return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>'; }).join('')+'</table>';
+}
+
+// ═══════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function dec(v) {
+  try{ return v?decodeURIComponent(v):''; }catch(e){ return v||''; }
+}
+</script>
+</body>
+</html>
