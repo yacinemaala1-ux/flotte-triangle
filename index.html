@@ -244,7 +244,6 @@ input,textarea{font-family:inherit}
     <button class="a-tab on"  onclick="showTab('dashboard',this)">📊 Tableau de bord</button>
     <button class="a-tab"     onclick="showTab('trucks',this)">🚛 Camions</button>
     <button class="a-tab"     onclick="showTab('history',this)">📋 Historique</button>
-    <button class="a-tab"     onclick="showTab('settings',this)">⚙️ Paramètres</button>
   </nav>
   <div class="a-body">
 
@@ -275,19 +274,8 @@ input,textarea{font-family:inherit}
       <div style="margin-top:14px" id="history-list"><div class="empty">Chargement…</div></div>
     </div>
 
-    <!-- SETTINGS -->
-    <div id="t-settings" class="t-panel">
-      <div style="margin-top:14px">
-        <p style="color:var(--gr);font-size:13px;margin-bottom:18px">Configuration EmailJS pour les alertes de retard.</p>
-        <div class="sf">
-          <div class="fg"><label class="fl">Service ID</label><input class="fi" id="cfg-sid" placeholder="service_xxxxxxx"></div>
-          <div class="fg"><label class="fl">Template ID</label><input class="fi" id="cfg-tid" placeholder="template_xxxxxxx"></div>
-          <div class="fg"><label class="fl">Public Key</label><input class="fi" id="cfg-key" placeholder="XXXXXXXXXXXXXXX"></div>
-          <div class="fg"><label class="fl">Email direction</label><input class="fi" id="cfg-mail" type="email" placeholder="direction@triangle.fr"></div>
-          <button class="btn-g" onclick="saveSettings()">Enregistrer</button>
-        </div>
-      </div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -326,28 +314,57 @@ input,textarea{font-family:inherit}
 
   <!-- PROC-02 -->
   <div class="proc">
-    <div class="proc-head">📋 Conditions d'utilisation — PROC-02 V2.0</div>
+    <div class="proc-head">📋 PROC-02 — Procédure de remise et restitution des véhicules | Triangle CI | V2.0 | Avril 2026</div>
     <div class="proc-body">
-      <div class="proc-alerte">■ Tous les véhicules doivent être restitués sur le site de <strong>Dechy chaque vendredi avant fin de journée</strong>. Ils sont repris le lundi matin. <strong>Aucun véhicule ne doit stationner au domicile d'un employé le week-end</strong> sans autorisation écrite de la Direction.</div>
-      <div class="proc-sub">3. Remise – Lundi matin</div>
+
+      <div class="proc-alerte">
+        <strong>1. Objet</strong><br>
+        La présente procédure définit les règles de remise et restitution des véhicules de la flotte Triangle. Elle encadre l'état des lieux obligatoire à chaque mouvement ainsi que les obligations liées à la géolocalisation et aux caméras embarquées.
+      </div>
+
+      <div class="proc-alerte" style="margin-top:10px">
+        <strong>2. Principe général</strong><br>
+        ■ Tous les véhicules doivent être restitués sur le site de <strong>Dechy chaque vendredi avant la fin de journée</strong>. Ils sont repris le lundi matin.<br>
+        <strong>Aucun véhicule ne doit stationner au domicile d'un employé le week-end sans autorisation écrite de la Direction.</strong>
+      </div>
+
+      <div class="proc-sub">3. Remise du véhicule – Lundi matin</div>
       <ul class="proc-steps">
-        <li><span class="snum">1</span>Signature du registre de remise des clés — Conducteur + Responsable</li>
-        <li><span class="snum">2</span>Remise de la clé du véhicule attribué — Responsable</li>
-        <li><span class="snum">3</span>Réalisation de l'état des lieux – section LIVRAISON — Conducteur + Responsable</li>
-        <li><span class="snum">4</span>Vérification caméra embarquée et GPS actifs — Conducteur</li>
-        <li><span class="snum">5</span>Signature de la fiche état des lieux — Conducteur + Responsable</li>
-        <li><span class="snum">6</span>Départ autorisé après validation — Responsable</li>
+        <li><span class="snum">1</span><span>Signature du registre de remise des clés <em style="color:var(--gr)">— Conducteur + Responsable</em></span></li>
+        <li><span class="snum">2</span><span>Remise de la clé du véhicule attribué <em style="color:var(--gr)">— Responsable</em></span></li>
+        <li><span class="snum">3</span><span>Réalisation de l'état des lieux – section LIVRAISON (page 2) <em style="color:var(--gr)">— Conducteur + Responsable</em></span></li>
+        <li><span class="snum">4</span><span>Vérification caméra embarquée et GPS actifs <em style="color:var(--gr)">— Conducteur</em></span></li>
+        <li><span class="snum">5</span><span>Signature de la fiche état des lieux <em style="color:var(--gr)">— Conducteur + Responsable</em></span></li>
+        <li><span class="snum">6</span><span>Départ autorisé après validation <em style="color:var(--gr)">— Responsable</em></span></li>
       </ul>
+
       <div class="proc-sub">4. Restitution – Vendredi fin de journée</div>
       <ul class="proc-steps">
-        <li><span class="snum">1</span>Retour du véhicule propre sur le parking de Dechy — Conducteur</li>
-        <li><span class="snum">2</span>Réalisation de l'état des lieux – section RETOUR — Conducteur + Responsable</li>
-        <li><span class="snum">3</span>Consignation de toutes les anomalies constatées — Conducteur + Responsable</li>
-        <li><span class="snum">4</span>Signature de la fiche état des lieux — Conducteur + Responsable</li>
-        <li><span class="snum">5</span>Remise de la clé, rangement sur crochet numéroté — Conducteur → Responsable</li>
-        <li><span class="snum">6</span>Vérification de toutes les clés, verrouillage armoire — Responsable</li>
+        <li><span class="snum">1</span><span>Retour du véhicule propre sur le parking de Dechy <em style="color:var(--gr)">— Conducteur</em></span></li>
+        <li><span class="snum">2</span><span>Réalisation de l'état des lieux – section RETOUR (page 2) <em style="color:var(--gr)">— Conducteur + Responsable</em></span></li>
+        <li><span class="snum">3</span><span>Consignation de toutes les anomalies constatées <em style="color:var(--gr)">— Conducteur + Responsable</em></span></li>
+        <li><span class="snum">4</span><span>Signature de la fiche état des lieux <em style="color:var(--gr)">— Conducteur + Responsable</em></span></li>
+        <li><span class="snum">5</span><span>Remise de la clé, rangement sur crochet numéroté <em style="color:var(--gr)">— Conducteur → Responsable</em></span></li>
+        <li><span class="snum">6</span><span>Vérification de toutes les clés, verrouillage armoire <em style="color:var(--gr)">— Responsable</em></span></li>
       </ul>
-      <div class="proc-warn">⛔ La désactivation ou neutralisation intentionnelle du GPS ou des caméras embarquées est formellement <strong>INTERDITE</strong> et constitue une <strong>faute grave</strong>. Des sanctions disciplinaires pourront être prononcées.</div>
+
+      <div class="proc-sub">5. Caméras et géolocalisation</div>
+      <div class="proc-warn">
+        ⛔ La désactivation ou neutralisation intentionnelle du GPS ou des caméras embarquées est formellement <strong>INTERDITE</strong> et constitue une <strong>faute grave</strong>.<br><br>
+        • Vérifier le bon fonctionnement à chaque prise de véhicule<br>
+        • Ne jamais obstruer, déconnecter ou manipuler les équipements<br>
+        • Signaler tout dysfonctionnement au responsable immédiatement
+      </div>
+
+      <div class="proc-sub" style="color:var(--r);margin-top:14px">6. Sanctions</div>
+      <div class="proc-warn">
+        ■ Tout manquement sera traité au cas par cas. Des mesures disciplinaires pourront être prononcées selon la gravité des faits :<br><br>
+        • Non-restitution du véhicule le vendredi sans autorisation<br>
+        • Désactivation du GPS ou des caméras embarquées<br>
+        • Refus de réaliser l'état des lieux contradictoire<br>
+        • Utilisation personnelle du véhicule le week-end sans autorisation écrite
+      </div>
+
     </div>
   </div>
 
@@ -543,11 +560,30 @@ function hideLoading() {
 // ═══════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════
+var ADMIN_PWD = 'triangle2026'; // mot de passe admin
+
 window.addEventListener('load', function() {
   if(IS_DRIVER) {
     initDriver();
   } else {
-    initAdmin();
+    // Demander mot de passe pour accéder à l'admin
+    var storedAuth = sessionStorage.getItem('adminAuth');
+    if(storedAuth === ADMIN_PWD) {
+      initAdmin();
+    } else {
+      var pwd = prompt('🔒 Accès administrateur\nMot de passe requis :');
+      if(pwd === ADMIN_PWD) {
+        sessionStorage.setItem('adminAuth', pwd);
+        initAdmin();
+      } else {
+        document.getElementById('loading').innerHTML =
+          '<div style="text-align:center;color:#fff;padding:30px">'
+          +'<div style="font-size:48px;margin-bottom:16px">🔒</div>'
+          +'<div style="font-size:18px;font-weight:700;margin-bottom:8px">Accès refusé</div>'
+          +'<div style="font-size:14px;opacity:.7">Mot de passe incorrect.</div>'
+          +'</div>';
+      }
+    }
   }
 });
 
