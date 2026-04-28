@@ -539,7 +539,7 @@ function initAdmin(){
 
 function createDefaultTrucks(){
   var u={};
-  for(var i=1;i<=25;i++) u['trucks/'+i]={id:i,name:'Camion #'+i,model:'',plate:'',status:'free',driver:'',destination:'',since:null,expectedReturn:null,photo:'',geoLink:''};
+  for(var i=1;i<=25;i++) u['trucks/'+i]={id:i,name:'Camion #'+i,model:'',plate:'',status:'free',driver:'',destination:'',since:null,expectedReturn:null,hasPhoto:false,geoLink:''};
   DB.ref().update(u);
 }
 
@@ -551,6 +551,10 @@ function showTab(name,btn){
 }
 
 /* ── Dashboard ── */
+function getPhoto(id){
+  try{ return localStorage.getItem('truck_photo_'+id)||''; }catch(e){ return ''; }
+}
+
 function renderDash(){
   var trucks=Object.values(allTrucks),now=new Date(),free=0,svc=0,late=0;
   trucks.forEach(function(t){
@@ -567,7 +571,8 @@ function renderDash(){
   else dSvc.innerHTML=inSvc.map(function(t){
     var isLate=t.status==='late';
     var ret=t.expectedReturn?new Date(t.expectedReturn).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
-    var ico=t.photo?'<img src="'+t.photo+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">'
+    var _ph=t.hasPhoto?getPhoto(t.id):'';
+    var ico=_ph?'<img src="'+_ph+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">'
       :'<div class="trow-ico" style="background:'+(isLate?'var(--ol)':'var(--bl)')+'">🚛</div>';
     return '<div class="trow">'+ico+'<div class="trow-info"><div class="trow-name">'+esc(t.name)+'</div><div class="trow-sub">'+esc(t.driver||'—')+' · '+esc(t.destination||'—')+' · Retour: '+ret+'</div></div>'
       +'<span class="badge '+(isLate?'badge-late':'badge-svc')+'">'+(isLate?'En retard':'En service')+'</span>'
@@ -578,7 +583,8 @@ function renderDash(){
   var dFree=document.getElementById('d-free');
   if(!avail.length){dFree.innerHTML='<div class="empty">Aucun véhicule disponible</div>';}
   else dFree.innerHTML=avail.map(function(t){
-    var ico=t.photo?'<img src="'+t.photo+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">'
+    var _ph2=t.hasPhoto?getPhoto(t.id):'';
+    var ico=_ph2?'<img src="'+_ph2+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">'
       :'<div class="trow-ico" style="background:var(--gl)">🟢</div>';
     return '<div class="trow">'+ico+'<div class="trow-info"><div class="trow-name">'+esc(t.name)+'</div><div class="trow-sub">'+(t.model||'Non configuré')+' · '+(t.plate||'—')+'</div></div><span class="badge badge-free">Libre</span></div>';
   }).join('');
@@ -598,7 +604,7 @@ function renderGrid(){
     var sc=t.status==='free'?'g':t.status==='service'?'b':'o';
     var sl=t.status==='free'?'Libre':t.status==='service'?'En service':'En retard';
     return '<div class="tcard" onclick="openModal('+t.id+')">'
-      +(t.photo?'<img class="tcard-img" src="'+t.photo+'" alt="">':'<div class="tcard-placeholder">🚛</div>')
+      +(t.hasPhoto&&getPhoto(t.id)?'<img class="tcard-img" src="'+getPhoto(t.id)+'" alt="">':'<div class="tcard-placeholder">🚛</div>')
       +'<div class="tcard-bd"><div class="tcard-num">#'+t.id+'</div><div class="tcard-name">'+esc(t.name)+'</div><div class="tcard-plate">'+esc(t.plate||'—')+'</div><div class="tcard-st '+sc+'"><span class="dot dot-'+sc+'"></span>'+sl+'</div></div></div>';
   }).join('');
 }
@@ -688,6 +694,7 @@ function openModal(id){
   document.getElementById('edit-name').value=t.name||'';
   document.getElementById('edit-model').value=t.model||'';
   document.getElementById('edit-plate').value=t.plate||'';
+  truckPhotoB64=t.hasPhoto?getPhoto(t.id):'';
   var prev=document.getElementById('truck-photo-prev');
   prev.innerHTML=truckPhotoB64?'<img src="'+truckPhotoB64+'" alt=""><p>Cliquer pour changer</p>':'<p>📷 Cliquer pour ajouter une photo</p>';
   var fw=document.getElementById('force-wrap');
@@ -719,7 +726,12 @@ function onTruckPhoto(input){
 function saveTruck(){
   if(editingId===null)return;
   var ex=allTrucks[editingId]||{};
-  var data={id:editingId,name:document.getElementById('edit-name').value.trim()||('Camion #'+editingId),model:document.getElementById('edit-model').value.trim(),plate:document.getElementById('edit-plate').value.trim().toUpperCase(),status:ex.status||'free',driver:ex.driver||'',destination:ex.destination||'',since:ex.since||null,expectedReturn:ex.expectedReturn||null,geoLink:ex.geoLink||'',photo:truckPhotoB64};
+  // Sauvegarder photo en localStorage (trop lourde pour Firebase)
+  if(truckPhotoB64){
+    try{ localStorage.setItem('truck_photo_'+editingId, truckPhotoB64); }catch(e){}
+  }
+  // Firebase : métadonnées seulement, pas la photo
+  var data={id:editingId,name:document.getElementById('edit-name').value.trim()||('Camion #'+editingId),model:document.getElementById('edit-model').value.trim(),plate:document.getElementById('edit-plate').value.trim().toUpperCase(),status:ex.status||'free',driver:ex.driver||'',destination:ex.destination||'',since:ex.since||null,expectedReturn:ex.expectedReturn||null,geoLink:ex.geoLink||'',hasPhoto:!!truckPhotoB64};
   DB.ref('trucks/'+editingId).set(data).then(function(){genQR(data);document.getElementById('modal-title').textContent=data.name;});
 }
 
@@ -789,10 +801,11 @@ function pickYN(btn){var k=btn.dataset.k;document.querySelectorAll('[data-k="'+k
 function compressImg(dataUrl,cb){
   var img=new Image();
   img.onload=function(){
-    var MAX=800,w=img.width,h=img.height;
+    var MAX=600,w=img.width,h=img.height;
     if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
-    var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
-    cb(c.toDataURL('image/jpeg',0.55));
+    var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    cb(cv.toDataURL('image/jpeg',0.4)); // qualité réduite = fichier ~30Ko max
   };
   img.src=dataUrl;
 }
