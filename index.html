@@ -507,20 +507,34 @@ window.addEventListener('load',function(){
 
 /* ══ ADMIN ══ */
 function initAdmin(){
+  var adminShown=false;
+  function showAdmin(){
+    if(adminShown)return;
+    adminShown=true;
+    hideLoading();
+    show('screen-admin');
+    var now=new Date();
+    document.getElementById('suivi-month').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  }
+
+  // Fallback : afficher après 3 secondes max même si Firebase est lent
+  setTimeout(showAdmin, 3000);
+
   DB.ref('trucks').on('value',function(snap){
     allTrucks=snap.val()||{};
-    if(Object.keys(allTrucks).length===0){createDefaultTrucks();return;}
+    if(Object.keys(allTrucks).length===0){
+      createDefaultTrucks();
+      showAdmin();
+      return;
+    }
     renderDash();renderGrid();renderGeo();
+    showAdmin(); // afficher dès la 1ère réponse Firebase
   });
+
   DB.ref('logs').on('value',function(snap){
     allLogs=snap.val()||{};
     renderSuivi();
   });
-  setTimeout(function(){
-    hideLoading();show('screen-admin');
-    var now=new Date();
-    document.getElementById('suivi-month').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-  },800);
 }
 
 function createDefaultTrucks(){
