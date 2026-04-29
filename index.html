@@ -941,7 +941,17 @@ function renderSuivi(){
         +'<div class="dossier-sub">'+esc(d.plate||'—')+' &middot; '+periode+'</div>'
       +'</div>'
       +'<div class="dossier-tags">'+tag+'</div>'
-      +'<span class="dos-arrow" id="'+did+'_arr">&#9658;</span>';
+      +(isEnCours
+        ? '<button class="btn-dos-edit" title="Modifier" style="margin-left:4px">✏️</button>'
+         +'<button class="btn-dos-del" title="Supprimer" style="margin-left:4px">🗑️</button>'
+        : '')
+      +'<span class="dos-arrow" id="'+did+'_arr" style="margin-left:6px">&#9658;</span>';
+
+    // Boutons modifier/supprimer dans le header
+    if(isEnCours && d.prise){
+      head.querySelector('.btn-dos-edit').addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); openEditDossier(prise); }; })(d.prise));
+      head.querySelector('.btn-dos-del').addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); deleteDossier(prise); }; })(d.prise));
+    }
     head.addEventListener('click', (function(id){ return function(){ toggleDossier(id); }; })(did));
 
     var body=document.createElement('div');
@@ -991,22 +1001,7 @@ function renderSuivi(){
     body.appendChild(pr);
     body.appendChild(rs);
 
-    // Boutons admin pour les dossiers "En cours"
-    if(isEnCours && d.prise){
-      var actions=document.createElement('div');
-      actions.className='dossier-actions';
-      var btnEdit=document.createElement('button');
-      btnEdit.className='btn-dos-edit';
-      btnEdit.textContent='✏️ Modifier';
-      btnEdit.addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); openEditDossier(prise); }; })(d.prise));
-      var btnDel=document.createElement('button');
-      btnDel.className='btn-dos-del';
-      btnDel.textContent='🗑️ Supprimer';
-      btnDel.addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); deleteDossier(prise); }; })(d.prise));
-      actions.appendChild(btnEdit);
-      actions.appendChild(btnDel);
-      body.appendChild(actions);
-    }
+
 
     div.appendChild(head);
     div.appendChild(body);
