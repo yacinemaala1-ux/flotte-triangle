@@ -578,18 +578,9 @@ function show(id){
 }
 
 // ─── INIT ─────────────────────────────────────────────
-var ADMIN_PWD='triangle2026';
 window.addEventListener('load',function(){
   if(IS_DRIVER){ initDriver(); }
-  else{
-    var auth=sessionStorage.getItem('adminAuth');
-    if(auth===ADMIN_PWD){ initAdmin(); }
-    else{
-      var pwd=prompt('🔒 Accès administrateur\nMot de passe :');
-      if(pwd===ADMIN_PWD){ sessionStorage.setItem('adminAuth',pwd); initAdmin(); }
-      else{ document.body.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--g);color:#fff;text-align:center;padding:20px"><div style="font-size:48px;margin-bottom:16px">🔒</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">Accès refusé</div><div style="font-size:14px;opacity:.7">Mot de passe incorrect.</div></div>'; }
-    }
-  }
+  else{ initAdmin(); }
 });
 
 // ════════════════════════════════════════════════════
