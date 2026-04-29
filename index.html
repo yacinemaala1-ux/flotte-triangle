@@ -6,8 +6,6 @@
 <title>Triangle CI — Gestion Flotte</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 /* ===== RESET & VARIABLES ===== */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -543,7 +541,41 @@ input,textarea,select{font-family:inherit}
      qui créent des problèmes de portée entre blocs
 ======================================================= -->
 <script>
-'use strict';
+// ─── Cloudinary ──────────────────────────────────────
+var CLOUDINARY_CLOUD  = 'drpdezq2g';
+var CLOUDINARY_PRESET = 'flotte triangle';
+var DB = null;
+
+// ─── Chargement Firebase dynamique ───────────────────
+function loadScript(url, cb) {
+  var s = document.createElement('script');
+  s.src = url;
+  s.onload = cb;
+  s.onerror = function() { alert('Erreur chargement: ' + url); };
+  document.head.appendChild(s);
+}
+
+function initFirebase() {
+  firebase.initializeApp({
+    apiKey: "AIzaSyBYYCelsusDT0qEGKdmYa2Cop-v2uZSJME",
+    authDomain: "flotte-triangle.firebaseapp.com",
+    databaseURL: "https://flotte-triangle-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "flotte-triangle",
+    storageBucket: "flotte-triangle.firebasestorage.app",
+    messagingSenderId: "226293170947",
+    appId: "1:226293170947:web:bdc32a160185410147df36"
+  });
+  DB = firebase.database();
+  // Démarrer l'app une fois Firebase prêt
+  startApp();
+}
+
+// Charger les deux SDK dans l'ordre
+loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js', function() {
+  loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js', function() {
+    initFirebase();
+  });
+});
 
 // ─── Helpers LS ───────────────────────────────────────
 function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
@@ -573,6 +605,15 @@ var UP = new URLSearchParams(window.location.search);
 var pC = UP.get('c'), pN = UP.get('n'), pM = UP.get('m'), pP = UP.get('p'), pS = UP.get('s');
 var IS_DRIVER = !!pC;
 
+// ─── Cloudinary ───────────────────────────────────────
+var CLOUDINARY_CLOUD  = 'drpdezq2g';
+var CLOUDINARY_PRESET = 'flotte triangle';
+
+// ─── Variables globales Firebase ─────────────────────
+var allTrucks = {};
+var allLogs   = {};
+var suiviFilter = 'all';
+
 // ─── Variables driver (globales, pas de let/const) ────
 var photos       = [];
 var fuelVal      = '';
@@ -592,21 +633,41 @@ function show(id){
 }
 
 // ─── INIT ─────────────────────────────────────────────
-window.addEventListener('load',function(){
+// startApp() est appelé par le callback Firebase une fois prêt
+function startApp(){
   if(IS_DRIVER){ initDriver(); }
   else{ initAdmin(); }
-});
+}
 
 // ════════════════════════════════════════════════════
 //  ADMIN
 // ════════════════════════════════════════════════════
 function initAdmin(){
   show('screen-admin');
-  var t=getTrucks();
-  if(t.length===0){var arr=[];for(var i=1;i<=25;i++) arr.push({id:i,name:'Camion #'+i,model:'',plate:'',status:'free',driver:'',destination:'',since:null,expectedReturn:null,geoLink:''});saveTrucks(arr);}
   var now=new Date();
-  if(document.getElementById('suivi-month')) document.getElementById('suivi-month').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-  renderDash();renderGrid();renderSuivi();renderGeo();
+  if(document.getElementById('suivi-month'))
+    document.getElementById('suivi-month').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+
+  // Écouter Firebase en temps réel
+  DB.ref('trucks').on('value', function(snap){
+    allTrucks = snap.val() || {};
+    if(!Object.keys(allTrucks).length) createDefaultTrucks();
+    renderDash();
+    renderGrid();
+    renderGeo();
+  });
+
+  DB.ref('logs').on('value', function(snap){
+    allLogs = snap.val() || {};
+    renderSuivi();
+  });
+}
+
+function createDefaultTrucks(){
+  var u = {};
+  for(var i=1;i<=25;i++)
+    u['trucks/'+i]={id:i,name:'Camion #'+i,model:'',plate:'',status:'free',driver:'',destination:'',since:null,expectedReturn:null,geoLink:''};
+  DB.ref().update(u);
 }
 
 
@@ -626,37 +687,16 @@ function importSync(encoded){
     logLight.signature = signature;
 
     // Sauvegarder la fiche
-    var logs = getLogs();
-    // Éviter doublons
-    var exists = false;
-    for(var i=0;i<logs.length;i++){ if(logs[i].id===logLight.id){ exists=true; break; } }
-    if(!exists){
-      logs.push(logLight);
-      saveLogs(logs);
-    }
+    // Sauvegarder dans Firebase (éviter doublons)
+    DB.ref('logs/'+logLight.id).once('value', function(snap){
+      if(!snap.val()) DB.ref('logs/'+logLight.id).set(logLight);
+    });
 
-    // Mettre à jour le statut du camion
-    var trucks = getTrucks();
-    var idx = -1;
-    for(var i=0;i<trucks.length;i++){ if(trucks[i].id===logLight.truckId){ idx=i; break; } }
-    if(idx===-1){
-      trucks.push({id:logLight.truckId,name:logLight.truckName,model:logLight.marque,plate:logLight.truckPlate,status:'free',driver:'',destination:'',since:null,expectedReturn:null});
-      idx=trucks.length-1;
-    }
-    if(logLight.type==='delivery'){
-      trucks[idx].status         = 'service';
-      trucks[idx].driver         = logLight.driver;
-      trucks[idx].destination    = logLight.destination;
-      trucks[idx].since          = logLight.date;
-      trucks[idx].expectedReturn = logLight.expectedReturn || null;
-    } else {
-      trucks[idx].status         = 'free';
-      trucks[idx].driver         = '';
-      trucks[idx].destination    = '';
-      trucks[idx].since          = null;
-      trucks[idx].expectedReturn = null;
-    }
-    saveTrucks(trucks);
+    // Mettre à jour le statut du camion dans Firebase
+    var truckUpdate = logLight.type==='delivery'
+      ? {status:'service',driver:logLight.driver,destination:logLight.destination,since:logLight.date,expectedReturn:logLight.expectedReturn||null}
+      : {status:'free',driver:'',destination:'',since:null,expectedReturn:null};
+    DB.ref('trucks/'+logLight.truckId).update(truckUpdate);
 
     // Bandeau de confirmation
     showSyncBanner(logLight);
@@ -695,13 +735,15 @@ function showTab(name, btn){
 
 // Dashboard
 function renderDash(){
-  var trucks = getTrucks();
+  var trucks = Object.values(allTrucks);
   var now = new Date();
-  // Check overdue
+  // Check overdue -> mettre à jour Firebase si retard
   trucks.forEach(function(t){
-    if(t.status==='service' && t.expectedReturn && new Date(t.expectedReturn)<now) t.status='late';
+    if(t.status==='service' && t.expectedReturn && new Date(t.expectedReturn)<now){
+      t.status='late';
+      DB.ref('trucks/'+t.id+'/status').set('late');
+    }
   });
-  saveTrucks(trucks);
 
   var free=0, svc=0, late=0;
   trucks.forEach(function(t){
@@ -748,12 +790,7 @@ function renderDash(){
 // Trucks grid
 function forceRetourDash(id){
   if(!confirm('Marquer ce véhicule comme disponible ?')) return;
-  var trucks=getTrucks();
-  for(var i=0;i<trucks.length;i++){
-    if(trucks[i].id===id){trucks[i].status='free';trucks[i].driver='';trucks[i].destination='';trucks[i].since=null;trucks[i].expectedReturn=null;break;}
-  }
-  saveTrucks(trucks);
-  renderDash();
+  DB.ref('trucks/'+id).update({status:'free',driver:'',destination:'',since:null,expectedReturn:null});
 }
 
 var suiviFilter='all';
@@ -766,8 +803,8 @@ function setSuiviFilter(f,btn){
 }
 
 function renderSuivi(){
-  var mVal=document.getElementById('suivi-month').value;
-  var logs=getLogs();
+  var mVal=document.getElementById('suivi-month') ? document.getElementById('suivi-month').value : '';
+  var logs=Object.values(allLogs);
   if(mVal){
     var parts=mVal.split('-'),yr=parseInt(parts[0]),mo=parseInt(parts[1]);
     logs=logs.filter(function(l){var d=new Date(l.date);return d.getFullYear()===yr&&d.getMonth()+1===mo;});
@@ -803,22 +840,18 @@ function renderSuivi(){
 }
 
 function viewSuiviLog(id){
-  var logs=getLogs();
-  var log=null;
-  for(var i=0;i<logs.length;i++){if(logs[i].id===id){log=logs[i];break;}}
+  var log=allLogs[id];
   if(!log){alert('Fiche introuvable');return;}
   currentLog=log;fromAdmin=true;
   renderFiche(log);show('screen-fiche');
 }
 
 function renderGeo(){
-  var trucks=getTrucks().sort(function(a,b){return a.id-b.id;});
+  var trucks=Object.values(allTrucks).sort(function(a,b){return a.id-b.id;});
   var el=document.getElementById('geo-list');
   if(!trucks.length){el.innerHTML='<div class="empty-state">Aucun camion</div>';return;}
-  var settings=lsGet('settings')||{};
-  var geoLinks=settings.geoLinks||{};
   el.innerHTML=trucks.map(function(t){
-    var link=geoLinks[t.id]||'';
+    var link=t.geoLink||'';
     return '<div class="geo-card">'
       +'<div class="geo-top"><div class="geo-num" style="background:var(--g);color:#fff;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:monospace;flex-shrink:0">#'+t.id+'</div>'
       +'<div class="geo-info"><div class="geo-name">'+esc(t.name)+'</div><div class="geo-plate">'+esc(t.plate||'—')+'</div></div>'
@@ -834,17 +867,13 @@ function renderGeo(){
 
 function saveGeo(id){
   var val=document.getElementById('geo-'+id).value.trim();
-  var settings=lsGet('settings')||{};
-  if(!settings.geoLinks) settings.geoLinks={};
-  settings.geoLinks[id]=val;
-  lsSet('settings',settings);
-  renderGeo();
+  DB.ref('trucks/'+id+'/geoLink').set(val);
 }
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function renderGrid(){
-  var trucks = getTrucks();
+  var trucks = Object.values(allTrucks).sort(function(a,b){return a.id-b.id;});
   var g = document.getElementById('trucks-grid');
   if(trucks.length===0){ g.innerHTML='<div class="empty">Aucun camion</div>'; return; }
   g.innerHTML = trucks.map(function(t){
@@ -861,7 +890,7 @@ function renderGrid(){
 
 // History
 function renderHistory(){
-  var logs = getLogs();
+  var logs = Object.values(allLogs);
   var el = document.getElementById('history-list');
   if(logs.length===0){ el.innerHTML='<div class="empty">Aucune fiche enregistrée</div>'; return; }
   var sorted = logs.slice().sort(function(a,b){ return b.timestamp-a.timestamp; });
@@ -880,9 +909,7 @@ function renderHistory(){
 }
 
 function adminViewLog(id){
-  var logs = getLogs();
-  var log = null;
-  for(var i=0;i<logs.length;i++){ if(logs[i].id===id){ log=logs[i]; break; } }
+  var log = allLogs[id];
   if(!log){ alert('Fiche introuvable'); return; }
   currentLog = log;
   fromAdmin = true;
@@ -893,15 +920,22 @@ function adminViewLog(id){
 // Modal truck
 function openModal(id){
   editingId = id;
-  var trucks = getTrucks();
-  var t = null;
-  for(var i=0;i<trucks.length;i++){ if(trucks[i].id===id){ t=trucks[i]; break; } }
+  // Lire depuis allTrucks (Firebase, toujours à jour)
+  var t = allTrucks[id];
   if(!t) return;
   document.getElementById('modal-title').textContent = t.name;
   document.getElementById('edit-name').value  = t.name  || '';
   document.getElementById('edit-model').value = t.model || '';
   document.getElementById('edit-plate').value = t.plate || '';
-  document.getElementById('qr-box').innerHTML = '<p style="font-size:12px;color:var(--gr);padding:16px">QR code après sauvegarde</p>';
+  var fw = document.getElementById('force-wrap');
+  if(fw){
+    if(t.status==='service'||t.status==='late'){
+      fw.style.display='block';
+      document.getElementById('force-status-lbl').textContent = t.status==='late'?'en retard':'en service';
+      document.getElementById('force-driver-lbl').textContent = t.driver||'—';
+    } else fw.style.display='none';
+  }
+  document.getElementById('qr-box').innerHTML = '<p style="font-size:12px;color:var(--gr);padding:16px">Cliquez "Enregistrer" pour générer le QR</p>';
   document.getElementById('qr-info').textContent = '';
   document.getElementById('btn-qr').style.display = 'none';
   if(t.model && t.plate) genQR(t);
