@@ -1135,11 +1135,10 @@ function renderGeo(){
     var statusColor=t.status==='service'?'var(--b)':t.status==='late'?'var(--o)':'var(--g)';
 
     var card=document.createElement('div');
-    card.style.cssText='background:#fff;border:1.5px solid var(--brd);border-radius:12px;overflow:hidden;transition:all .18s;cursor:'+(hasLink?'pointer':'default')+';position:relative';
+    card.style.cssText='background:#fff;border:1.5px solid var(--brd);border-radius:12px;overflow:hidden;transition:all .18s;position:relative';
     if(hasLink){
       card.addEventListener('mouseenter',function(){ this.style.borderColor='var(--g)';this.style.boxShadow='0 4px 16px rgba(26,107,60,.12)'; });
       card.addEventListener('mouseleave',function(){ this.style.borderColor='var(--brd)';this.style.boxShadow='none'; });
-      card.addEventListener('click',function(){ window.open(link,'_blank'); });
     }
 
     // Bande de couleur statut en haut
@@ -1184,20 +1183,20 @@ function renderGeo(){
 
     if(hasLink){
       var btn=document.createElement('button');
-      btn.style.cssText='flex:1;padding:9px;background:var(--g);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px';
+      btn.style.cssText='flex:1;padding:13px 9px;background:var(--g);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;-webkit-tap-highlight-color:transparent;touch-action:manipulation';
       btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Voir sur Samsara';
       btn.addEventListener('click',function(e){ e.stopPropagation(); window.open(link,'_blank'); });
       btnRow.appendChild(btn);
 
       var btnEdit=document.createElement('button');
       btnEdit.title='Modifier le lien';
-      btnEdit.style.cssText='width:36px;height:36px;border:1.5px solid var(--brd);border-radius:8px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px';
+      btnEdit.style.cssText='width:48px;height:48px;border:1.5px solid var(--brd);border-radius:10px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation';
       btnEdit.textContent='✏️';
       btnEdit.addEventListener('click',function(e){ e.stopPropagation(); openGeoEdit(t.id,t.name,link); });
       btnRow.appendChild(btnEdit);
     } else {
       var btnAdd=document.createElement('button');
-      btnAdd.style.cssText='flex:1;padding:9px;background:#fff;color:var(--gr);border:1.5px dashed var(--brd);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+      btnAdd.style.cssText='flex:1;padding:13px 9px;background:#fff;color:var(--gr);border:1.5px dashed var(--brd);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;min-height:48px;-webkit-tap-highlight-color:transparent;touch-action:manipulation';
       btnAdd.textContent='+ Ajouter un lien GPS';
       btnAdd.addEventListener('click',function(e){ e.stopPropagation(); openGeoEdit(t.id,t.name,''); });
       btnRow.appendChild(btnAdd);
