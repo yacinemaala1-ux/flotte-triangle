@@ -240,6 +240,13 @@ input,textarea,select{font-family:inherit}
 .df-info{flex:1;min-width:0}
 .df-title{font-size:13px;font-weight:600}
 .df-sub{font-size:12px;color:var(--gr)}
+
+.dossier-actions{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--brd);background:var(--grl);justify-content:flex-end}
+.btn-dos-edit{background:var(--bl);color:var(--b);padding:7px 13px;border-radius:7px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit}
+.btn-dos-del{background:var(--rl);color:var(--r);padding:7px 13px;border-radius:7px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit}
+/* Modal edit dossier */
+#modal-edit-dossier{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:16px}
+#modal-edit-dossier.on{display:flex}
 </style>
 </head>
 <body>
@@ -983,6 +990,24 @@ function renderSuivi(){
 
     body.appendChild(pr);
     body.appendChild(rs);
+
+    // Boutons admin pour les dossiers "En cours"
+    if(isEnCours && d.prise){
+      var actions=document.createElement('div');
+      actions.className='dossier-actions';
+      var btnEdit=document.createElement('button');
+      btnEdit.className='btn-dos-edit';
+      btnEdit.textContent='✏️ Modifier';
+      btnEdit.addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); openEditDossier(prise); }; })(d.prise));
+      var btnDel=document.createElement('button');
+      btnDel.className='btn-dos-del';
+      btnDel.textContent='🗑️ Supprimer';
+      btnDel.addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); deleteDossier(prise); }; })(d.prise));
+      actions.appendChild(btnEdit);
+      actions.appendChild(btnDel);
+      body.appendChild(actions);
+    }
+
     div.appendChild(head);
     div.appendChild(body);
     el.appendChild(div);
@@ -1003,6 +1028,55 @@ function viewSuiviLog(id){
   if(!log){alert('Fiche introuvable');return;}
   currentLog=log;fromAdmin=true;
   renderFiche(log);show('screen-fiche');
+}
+
+var editingLogId = null;
+var editingTruckId2 = null;
+
+function openEditDossier(prise){
+  editingLogId   = prise.id;
+  editingTruckId2 = prise.truckId;
+  document.getElementById('ed-driver').value = prise.driver || '';
+  document.getElementById('ed-dest').value   = prise.destination || '';
+  document.getElementById('ed-return').value = prise.expectedReturn || '';
+  document.getElementById('ed-km').value     = prise.km || '';
+  document.getElementById('modal-edit-dossier').classList.add('on');
+}
+
+function saveEditDossier(){
+  if(!editingLogId) return;
+  var driver  = document.getElementById('ed-driver').value.trim();
+  var dest    = document.getElementById('ed-dest').value.trim();
+  var ret     = document.getElementById('ed-return').value;
+  var km      = document.getElementById('ed-km').value;
+
+  // Mettre à jour la fiche dans Firebase
+  var updates = {};
+  updates['logs/'+editingLogId+'/driver']         = driver;
+  updates['logs/'+editingLogId+'/destination']    = dest;
+  updates['logs/'+editingLogId+'/expectedReturn'] = ret;
+  updates['logs/'+editingLogId+'/km']             = parseInt(km)||0;
+  // Mettre à jour le camion aussi
+  updates['trucks/'+editingTruckId2+'/driver']         = driver;
+  updates['trucks/'+editingTruckId2+'/destination']    = dest;
+  updates['trucks/'+editingTruckId2+'/expectedReturn'] = ret||null;
+
+  DB.ref().update(updates).then(function(){
+    document.getElementById('modal-edit-dossier').classList.remove('on');
+    editingLogId = null;
+  });
+}
+
+function deleteDossier(prise){
+  if(!confirm('Supprimer cette mise en service et remettre le véhicule disponible ?')) return;
+  var updates = {};
+  updates['logs/'+prise.id]                          = null;
+  updates['trucks/'+prise.truckId+'/status']         = 'free';
+  updates['trucks/'+prise.truckId+'/driver']         = '';
+  updates['trucks/'+prise.truckId+'/destination']    = '';
+  updates['trucks/'+prise.truckId+'/since']          = null;
+  updates['trucks/'+prise.truckId+'/expectedReturn'] = null;
+  DB.ref().update(updates);
 }
 
 function renderGeo(){
@@ -1474,5 +1548,44 @@ function dec(v){ try{ return v?decodeURIComponent(v):''; }catch(e){ return v||''
   </div>
 </div>
 
+
+<!-- MODAL EDIT DOSSIER (admin) -->
+<div id="modal-edit-dossier">
+  <div class="modal" style="max-width:420px">
+    <div class="m-head">
+      <span class="m-title">Modifier la mise en service</span>
+      <button class="m-close" onclick="document.getElementById('modal-edit-dossier').classList.remove('on')">×</button>
+    </div>
+    <div class="m-body">
+      <div class="fg"><label class="fl">Conducteur</label><input class="fi" id="ed-driver" placeholder="Prénom Nom"></div>
+      <div class="fg"><label class="fl">Chantier / Lieu de travail</label><input class="fi" id="ed-dest" placeholder="Ex: Valenciennes"></div>
+      <div class="fg"><label class="fl">Retour prévu</label><input class="fi" type="datetime-local" id="ed-return"></div>
+      <div class="fg"><label class="fl">Kilométrage départ</label><input class="fi" type="number" id="ed-km" placeholder="Ex: 45230"></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn-gr" onclick="document.getElementById('modal-edit-dossier').classList.remove('on')">Annuler</button>
+      <button class="btn-g" onclick="saveEditDossier()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL EDIT DOSSIER (admin) -->
+<div id="modal-edit-dossier">
+  <div class="modal" style="max-width:420px">
+    <div class="m-head">
+      <span class="m-title">Modifier la mise en service</span>
+      <button class="m-close" onclick="document.getElementById('modal-edit-dossier').classList.remove('on')">×</button>
+    </div>
+    <div class="m-body">
+      <div class="fg"><label class="fl">Conducteur</label><input class="fi" id="ed-driver" placeholder="Prénom Nom"></div>
+      <div class="fg"><label class="fl">Chantier / Lieu de travail</label><input class="fi" id="ed-dest" placeholder="Ex: Valenciennes"></div>
+      <div class="fg"><label class="fl">Retour prévu</label><input class="fi" type="datetime-local" id="ed-return"></div>
+      <div class="fg"><label class="fl">Kilométrage départ</label><input class="fi" type="number" id="ed-km" placeholder="Ex: 45230"></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn-gr" onclick="document.getElementById('modal-edit-dossier').classList.remove('on')">Annuler</button>
+      <button class="btn-g" onclick="saveEditDossier()">Enregistrer</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
