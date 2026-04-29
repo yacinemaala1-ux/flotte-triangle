@@ -247,6 +247,51 @@ input,textarea,select{font-family:inherit}
 /* Modal edit dossier */
 #modal-edit-dossier{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:16px}
 #modal-edit-dossier.on{display:flex}
+/* ── Géolocalisation ── */
+.geo-layout{display:grid;grid-template-columns:300px 1fr;gap:0;height:calc(100vh - 160px);min-height:500px;border:1px solid var(--brd);border-radius:var(--rad);overflow:hidden;background:#fff}
+.geo-sidebar{border-right:1px solid var(--brd);overflow-y:auto;display:flex;flex-direction:column}
+.geo-sidebar-hd{padding:14px 16px;border-bottom:1px solid var(--brd);background:#fafaf8}
+.geo-sidebar-hd h3{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px}
+.geo-sidebar-hd p{font-size:11px;color:var(--gr)}
+.geo-truck-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--brd);cursor:pointer;transition:background .15s;position:relative}
+.geo-truck-item:hover{background:var(--gl)}
+.geo-truck-item.active{background:var(--gl);border-left:3px solid var(--g)}
+.geo-truck-item.no-link{opacity:.55;cursor:default}
+.geo-truck-item.no-link:hover{background:transparent}
+.geo-truck-num{width:36px;height:36px;border-radius:8px;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:monospace;flex-shrink:0}
+.geo-truck-num.svc{background:var(--b)}
+.geo-truck-num.late{background:var(--o)}
+.geo-truck-info{flex:1;min-width:0}
+.geo-truck-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.geo-truck-plate{font-size:11px;color:var(--gr);font-family:monospace}
+.geo-truck-status{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.geo-truck-status.free{background:var(--gl);color:var(--g)}
+.geo-truck-status.svc{background:var(--bl);color:var(--b)}
+.geo-truck-status.late{background:var(--ol);color:var(--o)}
+.geo-has-link{width:8px;height:8px;border-radius:50%;background:var(--g);flex-shrink:0}
+.geo-no-link{width:8px;height:8px;border-radius:50%;background:var(--brd);flex-shrink:0}
+.geo-main{display:flex;flex-direction:column;background:#f5f5f0}
+.geo-main-hd{padding:12px 18px;background:#fff;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.geo-main-title{font-size:14px;font-weight:700}
+.geo-main-sub{font-size:12px;color:var(--gr)}
+.geo-main-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.geo-frame-wrap{flex:1;position:relative;overflow:hidden}
+.geo-frame-wrap iframe{width:100%;height:100%;border:none;display:block}
+.geo-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:var(--gr);padding:40px;text-align:center}
+.geo-empty-ico{font-size:48px;opacity:.4}
+.geo-empty-txt{font-size:14px;font-weight:600;color:var(--txt)}
+.geo-empty-sub{font-size:12px}
+.geo-edit-row{display:flex;gap:8px;align-items:center;flex:1;max-width:420px}
+.geo-edit-row input{flex:1;border:1.5px solid var(--brd);border-radius:7px;padding:7px 10px;font-size:12px;font-family:inherit;outline:none;min-width:0}
+.geo-edit-row input:focus{border-color:var(--g)}
+.btn-geo-save{background:var(--g);color:#fff;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit;white-space:nowrap}
+.btn-geo-open{background:var(--b);color:#fff;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;text-decoration:none;display:inline-block}
+.geo-no-iframe{background:var(--gl);color:var(--g);padding:8px 12px;border-radius:7px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+@media(max-width:700px){
+  .geo-layout{grid-template-columns:1fr;height:auto}
+  .geo-sidebar{max-height:220px;border-right:none;border-bottom:1px solid var(--brd)}
+  .geo-frame-wrap{height:340px}
+}
 </style>
 </head>
 <body>
@@ -309,8 +354,33 @@ input,textarea,select{font-family:inherit}
     <!-- GEO -->
     <div id="t-geo" class="t-panel">
       <div style="margin-top:14px">
-        <p style="color:var(--gr);font-size:13px;margin-bottom:14px">Collez le lien GPS de chaque véhicule (Samsara, Geotab…).</p>
-        <div id="geo-list"></div>
+        <div class="geo-layout">
+          <!-- Sidebar camions -->
+          <div class="geo-sidebar">
+            <div class="geo-sidebar-hd">
+              <h3>🚛 Véhicules</h3>
+              <p>Cliquez pour afficher la géolocalisation</p>
+            </div>
+            <div id="geo-list"></div>
+          </div>
+          <!-- Zone principale iframe -->
+          <div class="geo-main">
+            <div class="geo-main-hd">
+              <div>
+                <div class="geo-main-title" id="geo-frame-title">Sélectionnez un véhicule</div>
+                <div class="geo-main-sub" id="geo-frame-sub">Cliquez sur un camion pour voir sa position GPS</div>
+              </div>
+              <div class="geo-main-actions" id="geo-main-actions"></div>
+            </div>
+            <div class="geo-frame-wrap" id="geo-frame-wrap">
+              <div class="geo-empty-state">
+                <div class="geo-empty-ico">📍</div>
+                <div class="geo-empty-txt">Aucun véhicule sélectionné</div>
+                <div class="geo-empty-sub">Sélectionnez un véhicule dans la liste<br>pour afficher sa géolocalisation</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1061,28 +1131,108 @@ function deleteDossier(prise){
   DB.ref().update(updates);
 }
 
+var currentGeoTruckId = null;
+
 function renderGeo(){
   var trucks=Object.values(allTrucks).sort(function(a,b){return a.id-b.id;});
   var el=document.getElementById('geo-list');
-  if(!trucks.length){el.innerHTML='<div class="empty-state">Aucun camion</div>';return;}
-  el.innerHTML=trucks.map(function(t){
+  if(!trucks.length){el.innerHTML='<div style="padding:16px;color:var(--gr);font-size:13px">Aucun camion configuré</div>';return;}
+
+  el.innerHTML='';
+  trucks.forEach(function(t){
     var link=t.geoLink||'';
-    return '<div class="geo-card">'
-      +'<div class="geo-top"><div class="geo-num" style="background:var(--g);color:#fff;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:monospace;flex-shrink:0">#'+t.id+'</div>'
-      +'<div class="geo-info"><div class="geo-name">'+esc(t.name)+'</div><div class="geo-plate">'+esc(t.plate||'—')+'</div></div>'
-      +(link?'<a class="btn-geo-open" href="'+esc(link)+'" target="_blank" style="background:var(--b);color:#fff;padding:8px 12px;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">📍 Ouvrir</a>':'')
+    var hasLink=!!link;
+    var statusClass=t.status==='service'?'svc':t.status==='late'?'late':'free';
+    var statusLabel=t.status==='service'?'En service':t.status==='late'?'En retard':'Libre';
+
+    var item=document.createElement('div');
+    item.className='geo-truck-item'+(hasLink?'':' no-link')+(currentGeoTruckId===t.id?' active':'');
+    item.innerHTML=
+      '<div class="geo-truck-num '+statusClass+'">#'+t.id+'</div>'
+      +'<div class="geo-truck-info">'
+        +'<div class="geo-truck-name">'+esc(t.name)+'</div>'
+        +'<div class="geo-truck-plate">'+esc(t.plate||'—')+'</div>'
       +'</div>'
-      +'<div class="geo-row">'
-        +'<input type="url" id="geo-'+t.id+'" placeholder="https://…" value="'+esc(link)+'">'
-        +'<button class="btn-geo-save" style="background:var(--g);color:#fff;padding:9px 14px;border-radius:7px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit" onclick="saveGeo('+t.id+')">Enregistrer</button>'
-      +'</div>'
-      +'</div>';
-  }).join('');
+      +'<div class="geo-truck-status '+statusClass+'">'+statusLabel+'</div>'
+      +'<div class="'+(hasLink?'geo-has-link':'geo-no-link')+'"></div>';
+
+    if(hasLink){
+      item.addEventListener('click',(function(truck){ return function(){
+        selectGeoTruck(truck);
+      };})(t));
+    }
+    el.appendChild(item);
+  });
+
+  // Si un camion était déjà sélectionné, re-sélectionner
+  if(currentGeoTruckId && allTrucks[currentGeoTruckId]){
+    selectGeoTruck(allTrucks[currentGeoTruckId]);
+  }
+}
+
+function selectGeoTruck(t){
+  currentGeoTruckId = t.id;
+  var link = t.geoLink||'';
+
+  // Mettre à jour la sidebar (actif)
+  document.querySelectorAll('.geo-truck-item').forEach(function(el){ el.classList.remove('active'); });
+  var items = document.querySelectorAll('.geo-truck-item');
+  items.forEach(function(el){
+    var numEl = el.querySelector('.geo-truck-num');
+    if(numEl && numEl.textContent==='#'+t.id) el.classList.add('active');
+  });
+
+  // Mettre à jour le header
+  var titleEl = document.getElementById('geo-frame-title');
+  var subEl   = document.getElementById('geo-frame-sub');
+  var actEl   = document.getElementById('geo-main-actions');
+  if(titleEl) titleEl.textContent = t.name + (t.plate?' — '+t.plate:'');
+  if(subEl)   subEl.textContent   = t.status==='service'?'En service · '+esc(t.driver||'—'):t.status==='late'?'En retard':t.driver?'Conducteur: '+t.driver:'Disponible';
+
+  // Actions (édition lien + ouvrir dans onglet)
+  if(actEl){
+    actEl.innerHTML='';
+    var row=document.createElement('div');
+    row.className='geo-edit-row';
+    var inp=document.createElement('input');
+    inp.type='url'; inp.placeholder='https://…'; inp.value=link;
+    inp.id='geo-inp-'+t.id;
+    var btnSave=document.createElement('button');
+    btnSave.className='btn-geo-save';
+    btnSave.textContent='💾 Enregistrer';
+    btnSave.addEventListener('click',function(){ saveGeo(t.id); });
+    row.appendChild(inp); row.appendChild(btnSave);
+    actEl.appendChild(row);
+    if(link){
+      var btnOpen=document.createElement('a');
+      btnOpen.className='btn-geo-open';
+      btnOpen.href=link; btnOpen.target='_blank';
+      btnOpen.textContent='↗ Plein écran';
+      actEl.appendChild(btnOpen);
+    }
+  }
+
+  // Charger le lien dans l'iframe
+  var wrap=document.getElementById('geo-frame-wrap');
+  if(!wrap) return;
+  if(link){
+    // Vérifier si le site accepte les iframes (certains bloquent)
+    wrap.innerHTML='<iframe src="'+esc(link)+'" allowfullscreen loading="lazy"></iframe>';
+  } else {
+    wrap.innerHTML='<div class="geo-empty-state"><div class="geo-empty-ico">🔗</div><div class="geo-empty-txt">Aucun lien GPS configuré</div><div class="geo-empty-sub">Ajoutez un lien dans le champ ci-dessus<br>puis cliquez Enregistrer</div></div>';
+  }
 }
 
 function saveGeo(id){
-  var val=document.getElementById('geo-'+id).value.trim();
-  DB.ref('trucks/'+id+'/geoLink').set(val);
+  var inp=document.getElementById('geo-inp-'+id);
+  var val=inp?inp.value.trim():(document.getElementById('geo-'+id)?document.getElementById('geo-'+id).value.trim():'');
+  DB.ref('trucks/'+id+'/geoLink').set(val).then(function(){
+    // Si ce camion est affiché, recharger
+    if(currentGeoTruckId===id && allTrucks[id]){
+      allTrucks[id].geoLink=val;
+      selectGeoTruck(allTrucks[id]);
+    }
+  });
 }
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
