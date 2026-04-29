@@ -1178,10 +1178,12 @@ function renderGeo(){
     btnRow.style.cssText='display:flex;gap:8px;align-items:center';
 
     if(hasLink){
-      var btn=document.createElement('button');
-      btn.style.cssText='flex:1;padding:13px 9px;background:var(--g);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;-webkit-tap-highlight-color:transparent;touch-action:manipulation';
+      var btn=document.createElement('a');
+      btn.href=link;
+      btn.target='_blank';
+      btn.rel='noopener noreferrer';
+      btn.style.cssText='flex:1;padding:13px 9px;background:var(--g);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;text-decoration:none;box-sizing:border-box';
       btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Voir sur Samsara';
-      btn.addEventListener('click',function(e){ e.stopPropagation(); window.open(link,'_blank'); });
       btnRow.appendChild(btn);
 
       var btnEdit=document.createElement('button');
