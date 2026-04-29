@@ -629,9 +629,76 @@ function show(id){
 
 // ─── INIT ─────────────────────────────────────────────
 // startApp() est appelé par le callback Firebase une fois prêt
+var ADMIN_PWD    = 'triangle2026';
+var EMPLOYE_PWD  = 'triangle59';
+
 function startApp(){
-  if(IS_DRIVER){ initDriver(); }
-  else{ initAdmin(); }
+  if(IS_DRIVER){
+    // Mode chauffeur : arrivé via QR code → formulaire direct
+    initDriver();
+  } else {
+    // Page d'accueil : demander quel mode
+    showLoginScreen();
+  }
+}
+
+function showLoginScreen(){
+  document.getElementById('screen-login').style.display = 'flex';
+}
+
+function loginAdmin(){
+  var pwd = document.getElementById('login-admin-pwd').value;
+  if(pwd === ADMIN_PWD){
+    document.getElementById('screen-login').style.display = 'none';
+    initAdmin();
+  } else {
+    document.getElementById('login-admin-err').style.display = 'block';
+    document.getElementById('login-admin-pwd').value = '';
+    document.getElementById('login-admin-pwd').focus();
+  }
+}
+
+function loginEmploye(){
+  var pwd = document.getElementById('login-emp-pwd').value;
+  if(pwd === EMPLOYE_PWD){
+    document.getElementById('screen-login').style.display = 'none';
+    initEmployeMode();
+  } else {
+    document.getElementById('login-emp-err').style.display = 'block';
+    document.getElementById('login-emp-pwd').value = '';
+    document.getElementById('login-emp-pwd').focus();
+  }
+}
+
+function initEmployeMode(){
+  // L'employé voit la liste des camions pour choisir lequel scanner
+  // → on affiche l'admin mais SANS l'onglet Suivi et Géo
+  document.getElementById('screen-employe').style.display = 'block';
+  // Charger la liste des camions
+  DB.ref('trucks').on('value', function(snap){
+    var trucks = snap.val() || {};
+    renderEmployeGrid(trucks);
+  });
+}
+
+function renderEmployeGrid(allTrucksData){
+  var trucks = Object.values(allTrucksData).sort(function(a,b){ return a.id-b.id; });
+  var g = document.getElementById('employe-grid');
+  if(!trucks.length){ g.innerHTML='<div class="empty-state">Aucun camion configuré</div>'; return; }
+  g.innerHTML = trucks.map(function(t){
+    var sc = t.status==='free'?'g':t.status==='service'?'b':'o';
+    var sl = t.status==='free'?'Libre':t.status==='service'?'En service':'En retard';
+    var base = location.origin + location.pathname;
+    var url  = base+'?c='+t.id+'&n='+encodeURIComponent(t.name)+'&m='+encodeURIComponent(t.model||'')+'&p='+encodeURIComponent(t.plate||'')+'&s='+t.status;
+    return '<a href="'+url+'" class="tcard" style="text-decoration:none;display:block">'
+      +'<div class="tcard-placeholder">🚛</div>'
+      +'<div class="tcard-bd">'
+      +'<div class="tcard-num">#'+t.id+'</div>'
+      +'<div class="tcard-name">'+esc(t.name)+'</div>'
+      +'<div class="tcard-plate">'+esc(t.plate||'—')+'</div>'
+      +'<div class="tcard-st '+sc+'"><span class="dot dot-'+sc+'"></span>'+sl+'</div>'
+      +'</div></a>';
+  }).join('');
 }
 
 // ════════════════════════════════════════════════════
@@ -1262,5 +1329,53 @@ function renderFiche(log){
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function dec(v){ try{ return v?decodeURIComponent(v):''; }catch(e){ return v||''; } }
 </script>
+
+<!-- ===== LOGIN SCREEN ===== -->
+<div id="screen-login" style="display:none;position:fixed;inset:0;background:var(--g);z-index:9999;align-items:center;justify-content:center;padding:20px;flex-direction:column">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" style="height:50px;width:auto;margin-bottom:24px">
+    <polygon points="60,10 90,60 30,60" fill="none" stroke="white" stroke-width="6"/>
+    <text x="100" y="45" font-family="DM Sans,system-ui" font-weight="700" font-size="28" fill="white">TRIANGLE</text>
+    <text x="100" y="65" font-family="DM Sans,system-ui" font-weight="600" font-size="11" fill="rgba(255,255,255,.8)" letter-spacing="2">CHAUDRONNERIE INDUSTRIELLE</text>
+  </svg>
+  <div style="width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px">
+
+    <!-- ADMIN -->
+    <div style="background:rgba(255,255,255,.12);border-radius:12px;padding:18px">
+      <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">🔐 Accès Administration</div>
+      <input id="login-admin-pwd" type="password" placeholder="Mot de passe admin" 
+        style="width:100%;padding:11px 13px;border-radius:8px;border:none;font-size:15px;font-family:inherit;margin-bottom:8px;outline:none"
+        onkeydown="if(event.key==='Enter') loginAdmin()">
+      <div id="login-admin-err" style="display:none;color:#ffcccc;font-size:12px;margin-bottom:8px">❌ Mot de passe incorrect</div>
+      <button onclick="loginAdmin()" style="width:100%;padding:12px;background:#fff;color:var(--g);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Accéder à l'administration</button>
+    </div>
+
+    <!-- EMPLOYÉ -->
+    <div style="background:rgba(255,255,255,.12);border-radius:12px;padding:18px">
+      <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">👷 Accès Employé</div>
+      <input id="login-emp-pwd" type="password" placeholder="Mot de passe employé"
+        style="width:100%;padding:11px 13px;border-radius:8px;border:none;font-size:15px;font-family:inherit;margin-bottom:8px;outline:none"
+        onkeydown="if(event.key==='Enter') loginEmploye()">
+      <div id="login-emp-err" style="display:none;color:#ffcccc;font-size:12px;margin-bottom:8px">❌ Mot de passe incorrect</div>
+      <button onclick="loginEmploye()" style="width:100%;padding:12px;background:rgba(255,255,255,.25);color:#fff;border:1.5px solid rgba(255,255,255,.4);border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Accéder à mon espace</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== EMPLOYE SCREEN ===== -->
+<div id="screen-employe" style="display:none;min-height:100vh;background:var(--grl)">
+  <header style="background:var(--g);color:#fff;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(26,107,60,.3)">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" style="height:38px;width:auto">
+      <polygon points="60,10 90,60 30,60" fill="none" stroke="white" stroke-width="6"/>
+      <text x="100" y="45" font-family="DM Sans,system-ui" font-weight="700" font-size="28" fill="white">TRIANGLE</text>
+    </svg>
+    <span style="font-size:11px;opacity:.7;font-weight:600;letter-spacing:1px">ESPACE EMPLOYÉ</span>
+  </header>
+  <div style="padding:16px;max-width:800px;margin:0 auto">
+    <p style="color:var(--gr);font-size:13px;margin:14px 0 16px">Sélectionnez votre véhicule pour remplir la fiche état des lieux :</p>
+    <div class="tgrid" id="employe-grid"><div class="empty-state">Chargement…</div></div>
+  </div>
+</div>
+
 </body>
 </html>
