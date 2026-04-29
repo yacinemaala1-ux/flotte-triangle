@@ -6,6 +6,8 @@
 <title>Triangle CI — Gestion Flotte</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 /* ===== RESET & VARIABLES ===== */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -307,6 +309,10 @@ input,textarea,select{font-family:inherit}
       <div class="fg"><label class="fl">Nom</label><input class="fi" id="edit-name" placeholder="Ex: Transit #1"></div>
       <div class="fg"><label class="fl">Marque / Modèle</label><input class="fi" id="edit-model" placeholder="Ex: Ford Transit 350L"></div>
       <div class="fg"><label class="fl">Immatriculation</label><input class="fi" id="edit-plate" placeholder="Ex: AB-123-CD" oninput="this.value=this.value.toUpperCase()"></div>
+      <div id="force-wrap" style="display:none;margin-bottom:14px">
+        <div style="background:var(--ol);border-left:4px solid var(--o);padding:10px 12px;border-radius:0 8px 8px 0;font-size:12px;color:#7a3a00;margin-bottom:8px">⚠️ Ce véhicule est <strong id="force-status-lbl">en service</strong>.<br>Conducteur : <strong id="force-driver-lbl">—</strong></div>
+        <button class="btn-g" onclick="forceRetour()" style="width:100%">✅ Marquer comme disponible</button>
+      </div>
       <div class="qr-wrap" id="qr-box"><p style="font-size:12px;color:var(--gr);padding:16px">QR code après sauvegarde</p></div>
       <p class="qr-info" id="qr-info"></p>
       <button class="btn-print-qr" id="btn-qr" style="display:none" onclick="printQR()">🖨️ Imprimer QR code</button>
@@ -957,225 +963,118 @@ function genQR(t){
 }
 
 function printQR(){
-  var btn  = document.getElementById('btn-qr');
-  var url  = btn.dataset.url;
-  var name = btn.dataset.name;
-  var plate= btn.dataset.plate;
-  var w = window.open('','_blank','width=500,height=640');
+  var btn=document.getElementById('btn-qr'),url=btn.dataset.url,name=btn.dataset.name,plate=btn.dataset.plate;
+  var w=window.open('','_blank','width=500,height=640');
+  var qrScript='<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><'+'/scr'+'ipt>';
+  var initScript='<scr'+'ipt>new QRCode(document.getElementById("qr"),{text:'+JSON.stringify(url)+',width:210,height:210});<'+'/scr'+'ipt>';
   w.document.write('<!DOCTYPE html><html><head><title>QR '+name+'</title>'
     +'<style>body{font-family:system-ui;text-align:center;padding:28px;background:#fff}'
-    +'h2{color:#1a6b3c;font-size:21px;margin-bottom:3px}p{color:#666;font-size:13px;margin-bottom:18px}'
-    +'.wrap{display:inline-block;padding:14px;border:2px solid #e0e0d8;border-radius:10px}'
-    +'.info{margin-top:14px;font-size:11px;color:#999;font-family:monospace;word-break:break-all}'
+    +'h2{color:#1a6b3c;font-size:20px;margin-bottom:3px}p{color:#666;font-size:13px;margin-bottom:18px}'
+    +'.w{display:inline-block;padding:14px;border:2px solid #e0e0d8;border-radius:10px}'
+    +'.info{margin-top:14px;font-size:10px;color:#999;word-break:break-all}'
     +'@media print{button{display:none!important}}</style>'
-    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>'
-    +'</head><body>'
-    +'<h2>🚛 '+name+'</h2>'
-    +'<p>Immatriculation : <strong>'+plate+'</strong></p>'
-    +'<div class="wrap"><div id="qr"></div></div>'
+    +qrScript+'</head><body>'
+    +'<h2>🚛 '+name+'</h2><p>Immatriculation : <strong>'+(plate||'—')+'</strong></p>'
+    +'<div class="w"><div id="qr"></div></div>'
     +'<div class="info">'+url+'</div><br>'
     +'<button onclick="window.print()" style="margin-top:16px;padding:11px 22px;background:#1a6b3c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">🖨️ Imprimer</button>'
-    +'<script>new QRCode(document.getElementById("qr"),{text:'+JSON.stringify(url)+',width:210,height:210});<\/script>'
-    +'</body></html>');
+    +initScript+'</body></html>');
   w.document.close();
 }
 
-// Settings
-function saveSettings(){
-  lsSet('settings',{
-    serviceId:document.getElementById('cfg-sid').value.trim(),
-    templateId:document.getElementById('cfg-tid').value.trim(),
-    pubKey:document.getElementById('cfg-key').value.trim(),
-    email:document.getElementById('cfg-mail').value.trim()
-  });
-  alert('Paramètres enregistrés !');
-}
-
-function loadSettingsUI(){
-  var s = getSettings();
-  if(s.serviceId)  document.getElementById('cfg-sid').value  = s.serviceId;
-  if(s.templateId) document.getElementById('cfg-tid').value  = s.templateId;
-  if(s.pubKey)     document.getElementById('cfg-key').value  = s.pubKey;
-  if(s.email)      document.getElementById('cfg-mail').value = s.email;
-}
-
-// ════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 //  DRIVER
-// ════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 function initDriver(){
   show('screen-driver');
+  var truckId = parseInt(pC,10);
+  DB.ref('trucks/'+truckId).once('value', function(snap){
+    var t = snap.val(), status = t ? t.status : (pS||'free');
+    isDelivery = (status==='free'||status==='late');
+    setupDriverUI(truckId, dec(pN)||'Camion', dec(pM)||'', dec(pP)||'');
+  });
+}
 
-  var truckId   = parseInt(pC,10);
-  var truckName = decode(pN) || 'Camion';
-  var truckModel= decode(pM) || '';
-  var truckPlate= decode(pP) || '';
-
-  // Status depuis localStorage en priorité
-  var trucks = getTrucks();
-  var local  = null;
-  for(var i=0;i<trucks.length;i++){ if(trucks[i].id===truckId){ local=trucks[i]; break; } }
-  var status = local ? local.status : (pS||'free');
-
-  // free ou late → livraison ; service → retour
-  isDelivery = (status==='free' || status==='late');
-
-  // Mettre à jour l'UI
-  document.getElementById('d-num').textContent   = '#'+truckId;
-  document.getElementById('d-name').textContent  = truckName;
-  document.getElementById('d-meta').textContent  = [truckModel, truckPlate].filter(Boolean).join(' — ') || '—';
-  document.getElementById('d-model').textContent = truckModel || '—';
-  document.getElementById('d-plate').textContent = truckPlate || '—';
-
-  var badge = document.getElementById('d-badge');
-  var edlH  = document.getElementById('edl-head');
-  var delF  = document.getElementById('delivery-fields');
-
+function setupDriverUI(truckId, truckName, truckModel, truckPlate){
+  document.getElementById('d-num').textContent  = '#'+truckId;
+  document.getElementById('d-name').textContent = truckName;
+  document.getElementById('d-meta').textContent = [truckModel,truckPlate].filter(Boolean).join(' — ')||'—';
+  document.getElementById('d-model').textContent = truckModel||'—';
+  document.getElementById('d-plate').textContent = truckPlate||'—';
+  var badge=document.getElementById('d-badge'), edlH=document.getElementById('edl-head'), delF=document.getElementById('delivery-fields');
   if(isDelivery){
-    badge.textContent = '🚚 Livraison — Prise en charge';
-    badge.className   = 'd-typebadge tb-liv';
-    edlH.textContent  = '📏 État des lieux — À la livraison';
-    delF.style.display= 'block';
+    badge.textContent='🚚 Livraison — Prise en charge'; badge.className='d-typebadge tb-liv';
+    edlH.textContent='📏 État des lieux — À la livraison'; delF.style.display='block';
   } else {
-    badge.textContent = '🏁 Retour — Restitution';
-    badge.className   = 'd-typebadge tb-ret';
-    edlH.textContent  = '📏 État des lieux — Au retour';
-    delF.style.display= 'none';
+    badge.textContent='🏁 Retour — Restitution'; badge.className='d-typebadge tb-ret';
+    edlH.textContent='📏 État des lieux — Au retour'; delF.style.display='none';
   }
-
-  // Date auto
-  document.getElementById('sig-date').textContent =
-    new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-
-  // Canvas signature — on attend que le DOM soit rendu
+  document.getElementById('sig-date').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   setTimeout(initSig, 200);
 }
 
-function decode(v){ try{ return v ? decodeURIComponent(v) : ''; } catch(e){ return v||''; } }
+function pickFuel(btn){ document.querySelectorAll('.fuel-btn').forEach(function(b){b.classList.remove('on');}); btn.classList.add('on'); fuelVal=btn.dataset.v; }
+function pickYN(btn){ var k=btn.dataset.k; document.querySelectorAll('[data-k="'+k+'"]').forEach(function(b){b.classList.remove('on');}); btn.classList.add('on'); checks[k]=btn.dataset.v; }
 
-// ── Carburant ────────────────────────────────────────
-function pickFuel(btn){
-  document.querySelectorAll('.fuel-btn').forEach(function(b){ b.classList.remove('on'); });
-  btn.classList.add('on');
-  fuelVal = btn.dataset.v;
-}
-
-// ── O/N checks ───────────────────────────────────────
-function pickYN(btn){
-  var k = btn.dataset.k;
-  document.querySelectorAll('[data-k="'+k+'"]').forEach(function(b){ b.classList.remove('on'); });
-  btn.classList.add('on');
-  checks[k] = btn.dataset.v;
-}
-
-// ── Photos ───────────────────────────────────────────
+// ── Photos ────────────────────────────────────────────
 function compressImg(dataUrl, cb){
   var img = new Image();
   img.onload = function(){
-    var MAX=800, w=img.width, h=img.height;
+    var MAX=900, w=img.width, h=img.height;
     if(w>h){ if(w>MAX){ h=Math.round(h*MAX/w); w=MAX; } }
     else    { if(h>MAX){ w=Math.round(w*MAX/h); h=MAX; } }
-    var c=document.createElement('canvas');
-    c.width=w; c.height=h;
-    c.getContext('2d').drawImage(img,0,0,w,h);
-    cb(c.toDataURL('image/jpeg',0.6));
+    var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    cb(cv.toDataURL('image/jpeg', 0.7));
   };
   img.src = dataUrl;
 }
 
 function onPhotos(input){
-  var files = Array.from(input.files);
-  files.forEach(function(file){
+  Array.from(input.files).forEach(function(file){
     var r = new FileReader();
-    r.onload = function(e){
-      compressImg(e.target.result, function(compressed){
-        photos.push(compressed);
-        renderPhotos();
-      });
-    };
+    r.onload = function(e){ compressImg(e.target.result, function(c){ photos.push(c); renderPhotos(); }); };
     r.readAsDataURL(file);
   });
-  input.value = '';
+  input.value='';
 }
 
 function renderPhotos(){
-  var cnt  = photos.length;
-  var need = Math.max(0,4-cnt);
-  var ctr  = document.getElementById('photo-ctr');
-  ctr.textContent = cnt+' photo'+(cnt>1?'s':'')+
-    (need>0?' — encore '+need+' requise'+(need>1?'s':''):'  ✓ Minimum atteint');
+  var cnt=photos.length, need=Math.max(0,4-cnt);
+  var ctr=document.getElementById('photo-ctr');
+  ctr.textContent = cnt+' photo'+(cnt>1?'s':'')+(need>0?' — encore '+need+' requise'+(need>1?'s':''):'  ✓ Minimum atteint');
   ctr.className = 'photo-counter '+(cnt>=4?'pc-ok':'pc-warn');
-
-  var g = document.getElementById('pgrid');
-  g.innerHTML = photos.map(function(p,i){
-    return '<div class="pthumb">'
-      +'<img src="'+p+'" alt="Photo '+(i+1)+'">'
-      +'<button type="button" class="pdel" onclick="delPhoto('+i+')">×</button>'
-      +'</div>';
+  document.getElementById('pgrid').innerHTML = photos.map(function(p,i){
+    return '<div class="pthumb"><img src="'+p+'"><button type="button" class="pdel" onclick="delPhoto('+i+')">×</button></div>';
   }).join('');
 }
 
 function delPhoto(i){ photos.splice(i,1); renderPhotos(); }
 
-// ── Signature ────────────────────────────────────────
+// ── Signature ─────────────────────────────────────────
 function initSig(){
-  sigCanvas = document.getElementById('sig-canvas');
-  if(!sigCanvas) return;
+  sigCanvas = document.getElementById('sig-canvas'); if(!sigCanvas) return;
   sigCtx = sigCanvas.getContext('2d');
-  var W = sigCanvas.offsetWidth  || sigCanvas.parentElement.offsetWidth || 300;
-  var H = 150;
-  var DPR = window.devicePixelRatio || 1;
-  sigCanvas.width  = W * DPR;
-  sigCanvas.height = H * DPR;
+  var W=sigCanvas.offsetWidth||300, DPR=window.devicePixelRatio||1;
+  sigCanvas.width=W*DPR; sigCanvas.height=150*DPR;
   sigCtx.setTransform(DPR,0,0,DPR,0,0);
-  sigCtx.strokeStyle = '#1a1a18';
-  sigCtx.lineWidth   = 2.5;
-  sigCtx.lineCap     = 'round';
-  sigCtx.lineJoin    = 'round';
-
-  function pos(e){
-    var r  = sigCanvas.getBoundingClientRect();
-    var ev = e.touches ? e.touches[0] : e;
-    return { x: ev.clientX-r.left, y: ev.clientY-r.top };
-  }
+  sigCtx.strokeStyle='#1a1a18'; sigCtx.lineWidth=2.5; sigCtx.lineCap='round'; sigCtx.lineJoin='round';
+  function pos(e){ var r=sigCanvas.getBoundingClientRect(), ev=e.touches?e.touches[0]:e; return{x:ev.clientX-r.left,y:ev.clientY-r.top}; }
   function start(e){ e.preventDefault(); sigDrawing=true; var p=pos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y); }
-  function move(e) { e.preventDefault(); if(!sigDrawing) return; var p=pos(e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); sigTouched=true; }
-  function end()   { sigDrawing=false; }
-
-  sigCanvas.addEventListener('mousedown', start);
-  sigCanvas.addEventListener('mousemove', move);
-  sigCanvas.addEventListener('mouseup',   end);
-  sigCanvas.addEventListener('mouseleave',end);
-  sigCanvas.addEventListener('touchstart', start, {passive:false});
-  sigCanvas.addEventListener('touchmove',  move,  {passive:false});
-  sigCanvas.addEventListener('touchend',   end);
+  function move(e){ e.preventDefault(); if(!sigDrawing)return; var p=pos(e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); sigTouched=true; }
+  function end(){ sigDrawing=false; }
+  sigCanvas.addEventListener('mousedown',start); sigCanvas.addEventListener('mousemove',move);
+  sigCanvas.addEventListener('mouseup',end); sigCanvas.addEventListener('mouseleave',end);
+  sigCanvas.addEventListener('touchstart',start,{passive:false}); sigCanvas.addEventListener('touchmove',move,{passive:false}); sigCanvas.addEventListener('touchend',end);
 }
+function clearSig(){ if(!sigCtx)return; sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height); sigTouched=false; }
 
-function clearSig(){
-  if(!sigCtx) return;
-  sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height);
-  sigTouched = false;
-}
-
-function sigDataURL(){
-  if(!sigCanvas || sigCanvas.width===0) return '';
-  return sigCanvas.toDataURL('image/png');
-}
-
-// ── Erreur visible ───────────────────────────────────
-function showErr(msg){
-  var el = document.getElementById('drv-error');
-  el.textContent = '⚠️ '+msg;
-  el.style.display = 'block';
-  el.scrollIntoView({behavior:'smooth', block:'center'});
-}
+function showErr(msg){ var el=document.getElementById('drv-error'); el.textContent='⚠️ '+msg; el.style.display='block'; el.scrollIntoView({behavior:'smooth',block:'center'}); }
 function hideErr(){ document.getElementById('drv-error').style.display='none'; }
 
-// ── SUBMIT ───────────────────────────────────────────
+// ── SUBMIT ────────────────────────────────────────────
 function handleSubmit(e){
-  e.preventDefault();
-  hideErr();
-
-  // Valeurs
+  e.preventDefault(); hideErr();
   var conductor = document.getElementById('f-conductor').value.trim();
   var km        = document.getElementById('f-km').value.trim();
   var employe   = document.getElementById('f-employe').value.trim();
@@ -1183,227 +1082,142 @@ function handleSubmit(e){
   var retour    = isDelivery ? document.getElementById('f-return').value : '';
   var obs       = document.getElementById('f-obs').value.trim();
 
-  // Validations obligatoires
   if(!conductor){ showErr('Le nom du conducteur est obligatoire.'); document.getElementById('f-conductor').focus(); return; }
-  if(!km)       { showErr('Le kilométrage est obligatoire.'); document.getElementById('f-km').focus(); return; }
-  if(!employe)  { showErr('Le nom de l\'employé (signature) est obligatoire.'); document.getElementById('f-employe').focus(); return; }
-  if(isDelivery && !dest){ showErr('La destination / chantier est obligatoire.'); document.getElementById('f-dest').focus(); return; }
-
-  // Photos — avertissement non bloquant
-  if(photos.length < 4){
-    if(!confirm('Seulement '+photos.length+' photo(s) sur 4 requises.\nContinuer quand même ?')){
-      document.getElementById('photos-sec').scrollIntoView({behavior:'smooth',block:'center'});
-      return;
-    }
+  if(!km)       { showErr('Le kilométrage est obligatoire.');       document.getElementById('f-km').focus();        return; }
+  if(!employe)  { showErr("Le nom de l'employé est obligatoire.");  document.getElementById('f-employe').focus();   return; }
+  if(isDelivery&&!dest){ showErr('La destination est obligatoire.'); document.getElementById('f-dest').focus(); return; }
+  if(photos.length<4&&!confirm('Seulement '+photos.length+' photo(s) sur 4.\nContinuer quand même ?')){
+    document.getElementById('photos-sec').scrollIntoView({behavior:'smooth',block:'center'}); return;
+  }
+  if(!sigTouched&&!confirm('Aucune signature.\nContinuer quand même ?')){
+    document.getElementById('sig-sec').scrollIntoView({behavior:'smooth',block:'center'}); return;
   }
 
-  // Signature — avertissement non bloquant
-  if(!sigTouched){
-    if(!confirm('Aucune signature dessinée.\nContinuer quand même ?')){
-      document.getElementById('sig-sec').scrollIntoView({behavior:'smooth',block:'center'});
-      return;
-    }
+  var submitBtn = document.querySelector('.submit-btn');
+  submitBtn.value = '⏳ Upload photos…'; submitBtn.disabled = true;
+
+  var now=new Date(), logId='log_'+now.getTime(), truckId=parseInt(pC,10);
+  var sigDataUrl = sigCanvas ? sigCanvas.toDataURL('image/png') : '';
+
+  // 1. Upload toutes les photos + signature sur Cloudinary
+  var allToUpload = photos.slice();
+  if(sigDataUrl) allToUpload.push(sigDataUrl);
+
+  submitBtn.value = '⏳ Envoi photos (0/'+allToUpload.length+')…';
+
+  var uploadedUrls = new Array(allToUpload.length);
+  var remaining = allToUpload.length;
+
+  if(!remaining){
+    saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, [], '', now, submitBtn);
+    return;
   }
 
-  // Construction de la fiche
-  var now    = new Date();
-  var logId  = 'log_'+now.getTime();
-  var truckId= parseInt(pC,10);
+  allToUpload.forEach(function(dataUrl, i){
+    uploadToCloudinary(dataUrl, function(err, url){
+      uploadedUrls[i] = url||'';
+      remaining--;
+      submitBtn.value = '⏳ Envoi photos ('+( allToUpload.length-remaining)+'/'+allToUpload.length+')…';
+      if(remaining===0){
+        var photoUrls = uploadedUrls.slice(0, photos.length);
+        var sigUrl    = sigDataUrl ? (uploadedUrls[uploadedUrls.length-1]||'') : '';
+        saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, photoUrls, sigUrl, now, submitBtn);
+      }
+    });
+  });
+}
+
+function saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, photoUrls, sigUrl, now, submitBtn){
+  submitBtn.value = '⏳ Enregistrement…';
 
   var log = {
-    id:             logId,
-    truckId:        truckId,
-    truckName:      decode(pN) || 'Camion',
-    truckPlate:     decode(pP) || '',
-    type:           isDelivery ? 'delivery' : 'return',
-    driver:         conductor,
-    employe:        employe,
-    marque:         decode(pM) || '',
-    immat:          decode(pP) || '',
-    km:             parseInt(km,10),
-    fuel:           fuelVal,
-    obs:            obs,
-    destination:    dest,
-    expectedReturn: retour,
-    checks:         {pneuAV:checks.pneuAV, pneuAR:checks.pneuAR, secours:checks.secours, interieur:checks.interieur},
-    photos:         photos.slice(),
-    signature:      sigDataURL(),
-    date:           now.toISOString(),
-    dateStr:        now.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}),
-    timestamp:      now.getTime()
+    id:logId, truckId:truckId, truckName:dec(pN)||'Camion', truckPlate:dec(pP)||'',
+    type:isDelivery?'delivery':'return', driver:conductor, employe:employe,
+    marque:dec(pM)||'', immat:dec(pP)||'', km:parseInt(km,10), fuel:fuelVal,
+    obs:obs, destination:dest, expectedReturn:retour,
+    checks:{pneuAV:checks.pneuAV,pneuAR:checks.pneuAR,secours:checks.secours,interieur:checks.interieur},
+    photos:photoUrls, signature:sigUrl,
+    date:now.toISOString(),
+    dateStr:now.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+    timestamp:now.getTime()
   };
 
-  // Sauvegarde logs
-  var logs = getLogs();
-  logs.push(log);
-  saveLogs(logs);
-
-  // Mise à jour statut camion
-  var trucks = getTrucks();
-  var idx = -1;
-  for(var i=0;i<trucks.length;i++){ if(trucks[i].id===truckId){ idx=i; break; } }
-  if(idx===-1){
-    trucks.push({id:truckId,name:decode(pN)||'Camion',model:decode(pM)||'',plate:decode(pP)||'',status:'free',driver:'',destination:'',since:null,expectedReturn:null});
-    idx=trucks.length-1;
-  }
+  var updates = {};
+  updates['logs/'+logId] = log;
   if(isDelivery){
-    trucks[idx].status         = 'service';
-    trucks[idx].driver         = conductor;
-    trucks[idx].destination    = dest;
-    trucks[idx].since          = now.toISOString();
-    trucks[idx].expectedReturn = retour || null;
+    updates['trucks/'+truckId+'/status']='service'; updates['trucks/'+truckId+'/driver']=conductor;
+    updates['trucks/'+truckId+'/destination']=dest; updates['trucks/'+truckId+'/since']=now.toISOString();
+    updates['trucks/'+truckId+'/expectedReturn']=retour||null;
   } else {
-    trucks[idx].status         = 'free';
-    trucks[idx].driver         = '';
-    trucks[idx].destination    = '';
-    trucks[idx].since          = null;
-    trucks[idx].expectedReturn = null;
+    updates['trucks/'+truckId+'/status']='free'; updates['trucks/'+truckId+'/driver']='';
+    updates['trucks/'+truckId+'/destination']=''; updates['trucks/'+truckId+'/since']=null;
+    updates['trucks/'+truckId+'/expectedReturn']=null;
   }
-  saveTrucks(trucks);
 
-  // Succès : encoder la fiche dans l'URL et rediriger vers l'admin
-  // Les photos sont trop lourdes pour l'URL — on les passe via sessionStorage
-  currentLog = log;
-  fromAdmin  = false;
-
-  // Stocker les photos + signature séparément (trop gros pour URL)
-  try { sessionStorage.setItem('syncPhotos', JSON.stringify(log.photos)); } catch(e){}
-  try { sessionStorage.setItem('syncSig',    log.signature); }             catch(e){}
-
-  // Construire un objet léger (sans photos ni signature) pour l'URL
-  var logLight = {
-    id:             log.id,
-    truckId:        log.truckId,
-    truckName:      log.truckName,
-    truckPlate:     log.truckPlate,
-    type:           log.type,
-    driver:         log.driver,
-    employe:        log.employe,
-    marque:         log.marque,
-    immat:          log.immat,
-    km:             log.km,
-    fuel:           log.fuel,
-    obs:            log.obs,
-    destination:    log.destination,
-    expectedReturn: log.expectedReturn,
-    checks:         log.checks,
-    dateStr:        log.dateStr,
-    timestamp:      log.timestamp,
-    date:           log.date
-  };
-
-  try {
-    var encoded = btoa(encodeURIComponent(JSON.stringify(logLight)));
-    var adminUrl = location.pathname + '?sync=' + encoded;
-    location.href = adminUrl;
-  } catch(err) {
-    // Fallback si encodage échoue : afficher écran succès local
-    document.getElementById('suc-sub').textContent =
-      'Fiche '+(isDelivery?'de livraison':'de retour')+' enregistrée le '+log.dateStr+'.';
-    show('screen-success');
-  }
+  DB.ref().update(updates)
+    .then(function(){
+      currentLog = log; fromAdmin = false;
+      document.getElementById('suc-sub').textContent = 'Fiche '+(isDelivery?'de livraison':'de retour')+' enregistrée — '+log.dateStr;
+      show('screen-success');
+    })
+    .catch(function(err){
+      submitBtn.value='✅ Valider la fiche'; submitBtn.disabled=false;
+      showErr('Erreur sauvegarde : '+err.message);
+    });
 }
 
-// ── FICHE ────────────────────────────────────────────
-function goFiche(){
-  if(!currentLog){ alert('Aucune fiche disponible'); return; }
-  renderFiche(currentLog);
-  show('screen-fiche');
-}
+// ══════════════════════════════════════════════════════
+//  FICHE
+// ══════════════════════════════════════════════════════
+function goFiche(){ if(!currentLog)return; renderFiche(currentLog); show('screen-fiche'); }
+function backFromFiche(){ if(fromAdmin) show('screen-admin'); else show('screen-success'); }
 
-function backFromFiche(){
-  if(fromAdmin){ show('screen-admin'); }
-  else         { show('screen-success'); }
-}
-
-function cdot(v){
-  if(v==='O') return '<span class="cdot cdot-o">O</span>';
-  if(v==='N') return '<span class="cdot cdot-n">N</span>';
-  return '<span class="cdot cdot-d">—</span>';
-}
+function sec(t,b){ return '<div class="fsection"><div class="fsection-title">'+t+'</div><div class="fsection-body">'+b+'</div></div>'; }
+function tab(rows){ return '<table class="ftable">'+rows.map(function(r){ return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>'; }).join('')+'</table>'; }
+function cdot(v){ return v==='O'?'<span class="cdot cdot-o">O</span>':v==='N'?'<span class="cdot cdot-n">N</span>':'<span class="cdot cdot-d">—</span>'; }
 
 function renderFiche(log){
-  var typeStr = log.type==='delivery' ? 'Livraison — Prise en charge' : 'Retour — Restitution';
-  var html =
-    '<div class="fsection">'
-      +'<div class="fsection-title">Identification</div>'
-      +'<div class="fsection-body">'
-        +'<table class="ftable">'
-          +'<tr><td>Marque / Modèle</td><td>'+esc(log.marque||'—')+'</td></tr>'
-          +'<tr><td>Immatriculation</td><td>'+esc(log.immat||'—')+'</td></tr>'
-          +'<tr><td>Conducteur</td><td>'+esc(log.driver)+'</td></tr>'
-          +'<tr><td>Type</td><td><strong>'+typeStr+'</strong></td></tr>'
-          +'<tr><td>Date</td><td>'+esc(log.dateStr)+'</td></tr>'
-        +'</table>'
-      +'</div>'
-    +'</div>'
+  var typeStr = log.type==='delivery'?'Livraison — Prise en charge':'Retour — Restitution';
+  var html = sec('Identification', tab([
+    ['Marque / Modèle', esc(log.marque||'—')],['Immatriculation', esc(log.immat||'—')],
+    ['Conducteur', esc(log.driver)],['Type','<strong>'+typeStr+'</strong>'],['Date', esc(log.dateStr)]
+  ]))
+  + sec('État des lieux', tab([['Kilométrage', log.km?log.km.toLocaleString('fr-FR')+' km':'—'],['Carburant', log.fuel||'—']]))
+  + sec('Contrôles techniques', tab([
+    ['Pneu AV bon état',cdot(log.checks.pneuAV)],['Pneu AR bon état',cdot(log.checks.pneuAR)],
+    ['Roue de secours',cdot(log.checks.secours)],['Intérieur bon état',cdot(log.checks.interieur)]
+  ]));
 
-    +'<div class="fsection">'
-      +'<div class="fsection-title">État des lieux</div>'
-      +'<div class="fsection-body">'
-        +'<table class="ftable">'
-          +'<tr><td>Kilométrage</td><td>'+(log.km ? log.km.toLocaleString('fr-FR')+' km' : '—')+'</td></tr>'
-          +'<tr><td>Carburant</td><td>'+(log.fuel||'—')+'</td></tr>'
-        +'</table>'
-      +'</div>'
-    +'</div>'
-
-    +'<div class="fsection">'
-      +'<div class="fsection-title">Contrôles techniques</div>'
-      +'<div class="fsection-body">'
-        +'<table class="ftable">'
-          +'<tr><td>Pneu AV bon état</td><td>'+cdot(log.checks.pneuAV)+'</td></tr>'
-          +'<tr><td>Pneu AR bon état</td><td>'+cdot(log.checks.pneuAR)+'</td></tr>'
-          +'<tr><td>Roue de secours</td><td>'+cdot(log.checks.secours)+'</td></tr>'
-          +'<tr><td>Intérieur bon état</td><td>'+cdot(log.checks.interieur)+'</td></tr>'
-        +'</table>'
-      +'</div>'
-    +'</div>';
-
-  if(log.obs || log.destination){
-    html += '<div class="fsection">'
-      +'<div class="fsection-title">Observations'+( log.type==='delivery'?' & Destination':'')+'</div>'
-      +'<div class="fsection-body">';
-    if(log.obs) html += '<p style="font-size:13px;margin-bottom:10px">'+esc(log.obs)+'</p>';
+  if(log.obs||log.destination){
+    var body='';
+    if(log.obs) body+='<p style="font-size:13px;margin-bottom:10px">'+esc(log.obs)+'</p>';
     if(log.destination){
-      html += '<table class="ftable">'
-        +'<tr><td>Destination / Chantier</td><td><strong>'+esc(log.destination)+'</strong></td></tr>';
-      if(log.expectedReturn){
-        html += '<tr><td>Retour prévu</td><td>'+new Date(log.expectedReturn).toLocaleString('fr-FR')+'</td></tr>';
-      }
-      html += '</table>';
+      var rows=[['Destination',esc(log.destination)]];
+      if(log.expectedReturn) rows.push(['Retour prévu', new Date(log.expectedReturn).toLocaleString('fr-FR')]);
+      body+=tab(rows);
     }
-    html += '</div></div>';
+    html += sec('Observations'+(log.type==='delivery'?' & Destination':''), body);
   }
 
-  html += '<div class="fsection">'
-    +'<div class="fsection-title">Signature</div>'
-    +'<div class="fsection-body">'
-      +'<p style="font-size:12px;color:var(--gr);margin-bottom:8px">L\'employé : <strong>'+esc(log.employe||'—')+'</strong></p>'
-      +(log.signature ? '<img class="fiche-sig" src="'+log.signature+'" alt="Signature">' : '<p style="font-size:12px;color:var(--gr)">Pas de signature</p>')
-      +'<p style="font-size:11px;color:var(--gr);margin-top:8px">Fait à Dechy, le '+esc(log.dateStr)+'</p>'
-    +'</div>'
-  +'</div>';
+  html += sec('Signature',
+    '<p style="font-size:12px;color:var(--gr);margin-bottom:8px">L\'employ\u00e9 : <strong>'+esc(log.employe||'—')+'</strong></p>'
+    +(log.signature?'<img src="'+log.signature+'" style="max-width:240px;border:1px solid var(--brd);border-radius:6px" alt="Signature">':'<p style="font-size:12px;color:var(--gr)">Pas de signature</p>')
+    +'<p style="font-size:11px;color:var(--gr);margin-top:8px">Fait à Dechy, le '+esc(log.dateStr)+'</p>'
+  );
 
-  if(log.photos && log.photos.length>0){
-    html += '<div class="fsection">'
-      +'<div class="fsection-title">Photos ('+log.photos.length+')</div>'
-      +'<div class="fsection-body">'
-        +'<div class="fphotos">'
-          +log.photos.map(function(p){ return '<img src="'+p+'" alt="Photo">'; }).join('')
-        +'</div>'
-      +'</div>'
-    +'</div>';
+  if(log.photos&&log.photos.length){
+    html += sec('Photos ('+log.photos.length+')',
+      '<div class="fphotos">'+log.photos.map(function(p){ return p?'<img src="'+p+'" alt="">':''; }).join('')+'</div>'
+    );
   }
-
   document.getElementById('fiche-content').innerHTML = html;
 }
 
-// ── Utilitaire XSS safe ──────────────────────────────
-function esc(s){
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
+// ══════════════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════════════
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dec(v){ try{ return v?decodeURIComponent(v):''; }catch(e){ return v||''; } }
 </script>
 </body>
 </html>
