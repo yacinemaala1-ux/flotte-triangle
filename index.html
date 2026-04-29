@@ -353,34 +353,8 @@ input,textarea,select{font-family:inherit}
 
     <!-- GEO -->
     <div id="t-geo" class="t-panel">
-      <div style="margin-top:14px">
-        <div class="geo-layout">
-          <!-- Sidebar camions -->
-          <div class="geo-sidebar">
-            <div class="geo-sidebar-hd">
-              <h3>🚛 Véhicules</h3>
-              <p>Cliquez pour afficher la géolocalisation</p>
-            </div>
-            <div id="geo-list"></div>
-          </div>
-          <!-- Zone principale iframe -->
-          <div class="geo-main">
-            <div class="geo-main-hd">
-              <div>
-                <div class="geo-main-title" id="geo-frame-title">Sélectionnez un véhicule</div>
-                <div class="geo-main-sub" id="geo-frame-sub">Cliquez sur un camion pour voir sa position GPS</div>
-              </div>
-              <div class="geo-main-actions" id="geo-main-actions"></div>
-            </div>
-            <div class="geo-frame-wrap" id="geo-frame-wrap">
-              <div class="geo-empty-state">
-                <div class="geo-empty-ico">📍</div>
-                <div class="geo-empty-txt">Aucun véhicule sélectionné</div>
-                <div class="geo-empty-sub">Sélectionnez un véhicule dans la liste<br>pour afficher sa géolocalisation</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div style="margin-top:16px">
+        <div id="geo-list"></div>
       </div>
     </div>
 
@@ -1131,108 +1105,121 @@ function deleteDossier(prise){
   DB.ref().update(updates);
 }
 
-var currentGeoTruckId = null;
-
 function renderGeo(){
   var trucks=Object.values(allTrucks).sort(function(a,b){return a.id-b.id;});
   var el=document.getElementById('geo-list');
-  if(!trucks.length){el.innerHTML='<div style="padding:16px;color:var(--gr);font-size:13px">Aucun camion configuré</div>';return;}
+  if(!trucks.length){el.innerHTML='<div class="empty-state">Aucun camion</div>';return;}
 
   el.innerHTML='';
+
+  // Header section
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:18px';
+  hdr.innerHTML='<div><div style="font-size:15px;font-weight:700;color:var(--txt)">Suivi GPS — Samsara</div>'
+    +'<div style="font-size:12px;color:var(--gr);margin-top:2px">Cliquez sur un véhicule pour ouvrir Samsara</div></div>'
+    +'<div style="display:flex;align-items:center;gap:6px;background:var(--gl);padding:6px 12px;border-radius:20px">'
+    +'<span style="width:8px;height:8px;border-radius:50%;background:var(--g);display:inline-block"></span>'
+    +'<span style="font-size:12px;font-weight:600;color:var(--g)">Samsara connecté</span></div>';
+  el.appendChild(hdr);
+
+  // Grille
+  var grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px';
+
   trucks.forEach(function(t){
     var link=t.geoLink||'';
     var hasLink=!!link;
-    var statusClass=t.status==='service'?'svc':t.status==='late'?'late':'free';
+    var statusClass=t.status==='service'?'b':t.status==='late'?'o':'g';
     var statusLabel=t.status==='service'?'En service':t.status==='late'?'En retard':'Libre';
+    var statusBg=t.status==='service'?'var(--bl)':t.status==='late'?'var(--ol)':'var(--gl)';
+    var statusColor=t.status==='service'?'var(--b)':t.status==='late'?'var(--o)':'var(--g)';
 
-    var item=document.createElement('div');
-    item.className='geo-truck-item'+(hasLink?'':' no-link')+(currentGeoTruckId===t.id?' active':'');
-    item.innerHTML=
-      '<div class="geo-truck-num '+statusClass+'">#'+t.id+'</div>'
-      +'<div class="geo-truck-info">'
-        +'<div class="geo-truck-name">'+esc(t.name)+'</div>'
-        +'<div class="geo-truck-plate">'+esc(t.plate||'—')+'</div>'
-      +'</div>'
-      +'<div class="geo-truck-status '+statusClass+'">'+statusLabel+'</div>'
-      +'<div class="'+(hasLink?'geo-has-link':'geo-no-link')+'"></div>';
+    var card=document.createElement('div');
+    card.style.cssText='background:#fff;border:1.5px solid var(--brd);border-radius:12px;overflow:hidden;transition:all .18s;cursor:'+(hasLink?'pointer':'default')+';position:relative';
+    if(hasLink){
+      card.addEventListener('mouseenter',function(){ this.style.borderColor='var(--g)';this.style.boxShadow='0 4px 16px rgba(26,107,60,.12)'; });
+      card.addEventListener('mouseleave',function(){ this.style.borderColor='var(--brd)';this.style.boxShadow='none'; });
+      card.addEventListener('click',function(){ window.open(link,'_blank'); });
+    }
+
+    // Bande de couleur statut en haut
+    var band=document.createElement('div');
+    band.style.cssText='height:4px;background:'+statusBg.replace('var(--bl)','#dbeafe').replace('var(--ol)','#fef3c7').replace('var(--gl)','#dcfce7');
+    card.appendChild(band);
+
+    // Corps
+    var body=document.createElement('div');
+    body.style.cssText='padding:16px';
+
+    // Ligne 1 : numéro + statut
+    var row1=document.createElement('div');
+    row1.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
+    row1.innerHTML='<div style="width:42px;height:42px;border-radius:10px;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:monospace">#'+t.id+'</div>'
+      +'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;background:'+statusBg+';color:'+statusColor+'">'+statusLabel+'</span>';
+    body.appendChild(row1);
+
+    // Nom + plaque
+    var name=document.createElement('div');
+    name.style.cssText='font-size:14px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    name.textContent=t.name;
+    body.appendChild(name);
+
+    var plate=document.createElement('div');
+    plate.style.cssText='font-size:11px;color:var(--gr);font-family:monospace;margin-bottom:14px';
+    plate.textContent=t.plate||'—';
+    body.appendChild(plate);
+
+    // Conducteur si en service
+    if(t.status!=='free' && t.driver){
+      var drv=document.createElement('div');
+      drv.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:12px;padding:8px 10px;background:var(--grl);border-radius:7px';
+      drv.innerHTML='<span style="font-size:13px">👤</span><span style="font-size:12px;font-weight:600">'+esc(t.driver)+'</span>';
+      if(t.destination) drv.innerHTML+='<span style="font-size:11px;color:var(--gr);margin-left:auto">📍 '+esc(t.destination)+'</span>';
+      body.appendChild(drv);
+    }
+
+    // Bouton / état lien
+    var btnRow=document.createElement('div');
+    btnRow.style.cssText='display:flex;gap:8px;align-items:center';
 
     if(hasLink){
-      item.addEventListener('click',(function(truck){ return function(){
-        selectGeoTruck(truck);
-      };})(t));
+      var btn=document.createElement('button');
+      btn.style.cssText='flex:1;padding:9px;background:var(--g);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px';
+      btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Voir sur Samsara';
+      btn.addEventListener('click',function(e){ e.stopPropagation(); window.open(link,'_blank'); });
+      btnRow.appendChild(btn);
+
+      var btnEdit=document.createElement('button');
+      btnEdit.title='Modifier le lien';
+      btnEdit.style.cssText='width:36px;height:36px;border:1.5px solid var(--brd);border-radius:8px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px';
+      btnEdit.textContent='✏️';
+      btnEdit.addEventListener('click',function(e){ e.stopPropagation(); openGeoEdit(t.id,t.name,link); });
+      btnRow.appendChild(btnEdit);
+    } else {
+      var btnAdd=document.createElement('button');
+      btnAdd.style.cssText='flex:1;padding:9px;background:#fff;color:var(--gr);border:1.5px dashed var(--brd);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+      btnAdd.textContent='+ Ajouter un lien GPS';
+      btnAdd.addEventListener('click',function(e){ e.stopPropagation(); openGeoEdit(t.id,t.name,''); });
+      btnRow.appendChild(btnAdd);
     }
-    el.appendChild(item);
+
+    body.appendChild(btnRow);
+    card.appendChild(body);
+    grid.appendChild(card);
   });
 
-  // Si un camion était déjà sélectionné, re-sélectionner
-  if(currentGeoTruckId && allTrucks[currentGeoTruckId]){
-    selectGeoTruck(allTrucks[currentGeoTruckId]);
-  }
+  el.appendChild(grid);
 }
 
-function selectGeoTruck(t){
-  currentGeoTruckId = t.id;
-  var link = t.geoLink||'';
-
-  // Mettre à jour la sidebar (actif)
-  document.querySelectorAll('.geo-truck-item').forEach(function(el){ el.classList.remove('active'); });
-  var items = document.querySelectorAll('.geo-truck-item');
-  items.forEach(function(el){
-    var numEl = el.querySelector('.geo-truck-num');
-    if(numEl && numEl.textContent==='#'+t.id) el.classList.add('active');
-  });
-
-  // Mettre à jour le header
-  var titleEl = document.getElementById('geo-frame-title');
-  var subEl   = document.getElementById('geo-frame-sub');
-  var actEl   = document.getElementById('geo-main-actions');
-  if(titleEl) titleEl.textContent = t.name + (t.plate?' — '+t.plate:'');
-  if(subEl)   subEl.textContent   = t.status==='service'?'En service · '+esc(t.driver||'—'):t.status==='late'?'En retard':t.driver?'Conducteur: '+t.driver:'Disponible';
-
-  // Actions (édition lien + ouvrir dans onglet)
-  if(actEl){
-    actEl.innerHTML='';
-    var row=document.createElement('div');
-    row.className='geo-edit-row';
-    var inp=document.createElement('input');
-    inp.type='url'; inp.placeholder='https://…'; inp.value=link;
-    inp.id='geo-inp-'+t.id;
-    var btnSave=document.createElement('button');
-    btnSave.className='btn-geo-save';
-    btnSave.textContent='💾 Enregistrer';
-    btnSave.addEventListener('click',function(){ saveGeo(t.id); });
-    row.appendChild(inp); row.appendChild(btnSave);
-    actEl.appendChild(row);
-    if(link){
-      var btnOpen=document.createElement('a');
-      btnOpen.className='btn-geo-open';
-      btnOpen.href=link; btnOpen.target='_blank';
-      btnOpen.textContent='↗ Plein écran';
-      actEl.appendChild(btnOpen);
-    }
-  }
-
-  // Charger le lien dans l'iframe
-  var wrap=document.getElementById('geo-frame-wrap');
-  if(!wrap) return;
-  if(link){
-    // Vérifier si le site accepte les iframes (certains bloquent)
-    wrap.innerHTML='<iframe src="'+esc(link)+'" allowfullscreen loading="lazy"></iframe>';
-  } else {
-    wrap.innerHTML='<div class="geo-empty-state"><div class="geo-empty-ico">🔗</div><div class="geo-empty-txt">Aucun lien GPS configuré</div><div class="geo-empty-sub">Ajoutez un lien dans le champ ci-dessus<br>puis cliquez Enregistrer</div></div>';
-  }
+function openGeoEdit(id, name, currentLink){
+  var val=prompt('Lien GPS pour '+name+' — copiez le lien URL Samsara:', currentLink||'');
+  if(val===null) return; // annulé
+  DB.ref('trucks/'+id+'/geoLink').set(val.trim());
 }
 
 function saveGeo(id){
-  var inp=document.getElementById('geo-inp-'+id);
-  var val=inp?inp.value.trim():(document.getElementById('geo-'+id)?document.getElementById('geo-'+id).value.trim():'');
-  DB.ref('trucks/'+id+'/geoLink').set(val).then(function(){
-    // Si ce camion est affiché, recharger
-    if(currentGeoTruckId===id && allTrucks[id]){
-      allTrucks[id].geoLink=val;
-      selectGeoTruck(allTrucks[id]);
-    }
-  });
+  var val=(document.getElementById('geo-'+id)||{}).value||'';
+  DB.ref('trucks/'+id+'/geoLink').set(val.trim());
 }
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
