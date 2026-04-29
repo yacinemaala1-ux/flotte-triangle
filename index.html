@@ -1135,11 +1135,7 @@ function renderGeo(){
     var statusColor=t.status==='service'?'var(--b)':t.status==='late'?'var(--o)':'var(--g)';
 
     var card=document.createElement('div');
-    card.style.cssText='background:#fff;border:1.5px solid var(--brd);border-radius:12px;overflow:hidden;transition:all .18s;position:relative';
-    if(hasLink){
-      card.addEventListener('mouseenter',function(){ this.style.borderColor='var(--g)';this.style.boxShadow='0 4px 16px rgba(26,107,60,.12)'; });
-      card.addEventListener('mouseleave',function(){ this.style.borderColor='var(--brd)';this.style.boxShadow='none'; });
-    }
+    card.style.cssText='background:#fff;border:1.5px solid var(--brd);border-radius:12px;overflow:hidden;position:relative';
 
     // Bande de couleur statut en haut
     var band=document.createElement('div');
