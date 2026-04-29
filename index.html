@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Triangle CI — Gestion Flotte</title>
+<title>Triangle Chaudronnerie Industrielle</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
@@ -994,16 +994,14 @@ function renderSuivi(){
         +'<div class="dossier-sub">'+esc(d.plate||'—')+' &middot; '+periode+'</div>'
       +'</div>'
       +'<div class="dossier-tags">'+tag+'</div>'
-      +(isEnCours
-        ? '<button class="btn-dos-edit" title="Modifier" style="margin-left:4px">✏️</button>'
-         +'<button class="btn-dos-del" title="Supprimer" style="margin-left:4px">🗑️</button>'
-        : '')
+      +'<button class="btn-dos-edit" title="Modifier" style="margin-left:4px">✏️</button>'
+      +'<button class="btn-dos-del" title="Supprimer" style="margin-left:4px">🗑️</button>'
       +'<span class="dos-arrow" id="'+did+'_arr" style="margin-left:6px">&#9658;</span>';
 
-    // Boutons modifier/supprimer dans le header
-    if(isEnCours && d.prise){
+    // Boutons modifier/supprimer — disponibles pour tous les dossiers
+    if(d.prise){
       head.querySelector('.btn-dos-edit').addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); openEditDossier(prise); }; })(d.prise));
-      head.querySelector('.btn-dos-del').addEventListener('click',(function(prise){ return function(e){ e.stopPropagation(); deleteDossier(prise); }; })(d.prise));
+      head.querySelector('.btn-dos-del').addEventListener('click',(function(d2){ return function(e){ e.stopPropagation(); deleteDossierComplet(d2); }; })(d));
     }
     head.addEventListener('click', (function(id){ return function(){ toggleDossier(id); }; })(did));
 
@@ -1124,6 +1122,29 @@ function deleteDossier(prise){
   updates['trucks/'+prise.truckId+'/destination']    = '';
   updates['trucks/'+prise.truckId+'/since']          = null;
   updates['trucks/'+prise.truckId+'/expectedReturn'] = null;
+  DB.ref().update(updates);
+}
+
+function deleteDossierComplet(d){
+  var msg = d.resti
+    ? 'Supprimer ce dossier complet (prise en charge + restitution) ?'
+    : 'Supprimer cette mise en service et remettre le véhicule disponible ?';
+  if(!confirm(msg)) return;
+  var updates = {};
+  if(d.prise){
+    updates['logs/'+d.prise.id] = null;
+  }
+  if(d.resti){
+    updates['logs/'+d.resti.id] = null;
+  }
+  // Si pas de restitution → remettre le camion disponible
+  if(!d.resti && d.prise){
+    updates['trucks/'+d.prise.truckId+'/status']         = 'free';
+    updates['trucks/'+d.prise.truckId+'/driver']         = '';
+    updates['trucks/'+d.prise.truckId+'/destination']    = '';
+    updates['trucks/'+d.prise.truckId+'/since']          = null;
+    updates['trucks/'+d.prise.truckId+'/expectedReturn'] = null;
+  }
   DB.ref().update(updates);
 }
 
