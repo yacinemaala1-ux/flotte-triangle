@@ -1055,12 +1055,12 @@ function pickYN(btn){ var k=btn.dataset.k; document.querySelectorAll('[data-k="'
 function compressImg(dataUrl, cb){
   var img = new Image();
   img.onload = function(){
-    var MAX=900, w=img.width, h=img.height;
+    var MAX=700, w=img.width, h=img.height;
     if(w>h){ if(w>MAX){ h=Math.round(h*MAX/w); w=MAX; } }
     else    { if(h>MAX){ w=Math.round(w*MAX/h); h=MAX; } }
     var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
     cv.getContext('2d').drawImage(img,0,0,w,h);
-    cb(cv.toDataURL('image/jpeg', 0.7));
+    cb(cv.toDataURL('image/jpeg', 0.5));
   };
   img.src = dataUrl;
 }
@@ -1169,28 +1169,25 @@ function handleSubmit(e){
   var sigDataUrl = sigCanvas ? sigCanvas.toDataURL('image/png') : '';
 
   // 1. Upload toutes les photos + signature sur Cloudinary
-  var allToUpload = photos.slice();
-  if(sigDataUrl) allToUpload.push(sigDataUrl);
-
-  submitBtn.value = '⏳ Envoi photos (0/'+allToUpload.length+')…';
-
-  var uploadedUrls = new Array(allToUpload.length);
-  var remaining = allToUpload.length;
-
-  if(!remaining){
-    saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, [], '', now, submitBtn);
+  // Signature : gardée en base64 (légère), pas besoin de Cloudinary
+  // Photos seulement uploadées sur Cloudinary en parallèle
+  if(!photos.length){
+    saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, [], sigDataUrl, now, submitBtn);
     return;
   }
 
-  allToUpload.forEach(function(dataUrl, i){
+  submitBtn.value = '⏳ Envoi '+photos.length+' photo(s)…';
+
+  var photoUrls = new Array(photos.length);
+  var remaining = photos.length;
+
+  photos.forEach(function(dataUrl, i){
     uploadToCloudinary(dataUrl, function(err, url){
-      uploadedUrls[i] = url||'';
+      photoUrls[i] = url || '';
       remaining--;
-      submitBtn.value = '⏳ Envoi photos ('+( allToUpload.length-remaining)+'/'+allToUpload.length+')…';
-      if(remaining===0){
-        var photoUrls = uploadedUrls.slice(0, photos.length);
-        var sigUrl    = sigDataUrl ? (uploadedUrls[uploadedUrls.length-1]||'') : '';
-        saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, photoUrls, sigUrl, now, submitBtn);
+      submitBtn.value = '⏳ Photos '+(photos.length-remaining)+'/'+photos.length+'…';
+      if(remaining === 0){
+        saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, photoUrls, sigDataUrl, now, submitBtn);
       }
     });
   });
