@@ -292,6 +292,19 @@ input,textarea,select{font-family:inherit}
   .geo-sidebar{max-height:220px;border-right:none;border-bottom:1px solid var(--brd)}
   .geo-frame-wrap{height:340px}
 }
+
+/* Photo véhicule */
+.truck-photo-wrap{position:relative;width:100%;height:160px;border-radius:10px;overflow:hidden;background:var(--grl);border:2px dashed var(--brd);display:flex;align-items:center;justify-content:center;margin-bottom:14px;cursor:pointer;transition:border-color .2s}
+.truck-photo-wrap:hover{border-color:var(--g)}
+.truck-photo-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.truck-photo-placeholder{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--gr);pointer-events:none}
+.truck-photo-placeholder span{font-size:28px}
+.truck-photo-placeholder p{font-size:12px;font-weight:600}
+.truck-photo-del{position:absolute;top:8px;right:8px;width:28px;height:28px;background:rgba(0,0,0,.6);color:#fff;border-radius:50%;border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.tcard-photo{width:100%;height:90px;object-fit:cover;border-radius:8px 8px 0 0;display:block;background:var(--grl)}
+.tcard-photo-placeholder{width:100%;height:90px;background:var(--grl);border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--brd)}
+.geo-card-photo{width:100%;height:120px;object-fit:cover;display:block;background:var(--grl)}
+.geo-card-photo-placeholder{width:100%;height:80px;background:var(--grl);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--brd)}
 </style>
 </head>
 <body>
@@ -372,6 +385,15 @@ input,textarea,select{font-family:inherit}
       <button class="m-close" onclick="closeModal()">×</button>
     </div>
     <div class="m-body">
+      <!-- Photo véhicule -->
+      <div class="truck-photo-wrap" id="truck-photo-wrap" onclick="document.getElementById('truck-photo-input').click()">
+        <div class="truck-photo-placeholder" id="truck-photo-placeholder">
+          <span>🚛</span><p>Cliquez pour ajouter une photo</p>
+        </div>
+        <img id="truck-photo-preview" style="display:none;width:100%;height:100%;object-fit:cover">
+        <button class="truck-photo-del" id="truck-photo-del" style="display:none" onclick="event.stopPropagation();removeTruckPhoto()">×</button>
+      </div>
+      <input type="file" id="truck-photo-input" accept="image/*" style="display:none" onchange="onTruckPhoto(this)">
       <div class="fg"><label class="fl">Nom</label><input class="fi" id="edit-name" placeholder="Ex: Transit #1"></div>
       <div class="fg"><label class="fl">Marque / Modèle</label><input class="fi" id="edit-model" placeholder="Ex: Ford Transit 350L"></div>
       <div class="fg"><label class="fl">Immatriculation</label><input class="fi" id="edit-plate" placeholder="Ex: AB-123-CD" oninput="this.value=this.value.toUpperCase()"></div>
@@ -1137,10 +1159,17 @@ function renderGeo(){
     var card=document.createElement('div');
     card.style.cssText='background:#fff;border:1.5px solid var(--brd);border-radius:12px;overflow:hidden;position:relative';
 
-    // Bande de couleur statut en haut
-    var band=document.createElement('div');
-    band.style.cssText='height:4px;background:'+statusBg.replace('var(--bl)','#dbeafe').replace('var(--ol)','#fef3c7').replace('var(--gl)','#dcfce7');
-    card.appendChild(band);
+    // Photo ou bande couleur en haut
+    var photo=getTruckPhoto2(t.id);
+    if(photo){
+      var photoEl=document.createElement('img');
+      photoEl.src=photo; photoEl.className='geo-card-photo'; photoEl.alt=t.name;
+      card.appendChild(photoEl);
+    } else {
+      var band=document.createElement('div');
+      band.style.cssText='height:4px;background:'+statusBg.replace('var(--bl)','#dbeafe').replace('var(--ol)','#fef3c7').replace('var(--gl)','#dcfce7');
+      card.appendChild(band);
+    }
 
     // Corps
     var body=document.createElement('div');
@@ -1229,11 +1258,17 @@ function renderGrid(){
     var sc = t.status==='free'?'g':t.status==='service'?'b':'o';
     var sl = t.status==='free'?'Libre':t.status==='service'?'En service':'En retard';
     var dc = 'dot-'+sc;
+    var ph2=getTruckPhoto2(t.id);
+    var photoHtml=ph2
+      ?'<img class="tcard-photo" src="'+ph2+'" alt="'+esc(t.name)+'">'
+      :'<div class="tcard-photo-placeholder">🚛</div>';
     return '<div class="tcard" onclick="openModal('+t.id+')">'
-      +'<div class="tcard-num">#'+t.id+'</div>'
+      +photoHtml
+      +'<div style="padding:8px 6px">'
+      +'<div class="tcard-num" style="font-size:10px;color:var(--gr);margin-bottom:2px">#'+t.id+'</div>'
       +'<div class="tcard-name">'+esc(t.name)+'</div>'
       +'<div class="tcard-st '+sc+'"><span class="dot '+dc+'"></span>'+sl+'</div>'
-      +'</div>';
+      +'</div></div>';
   }).join('');
 }
 
@@ -1267,6 +1302,51 @@ function adminViewLog(id){
 }
 
 // Modal truck
+// ── Photos camions (localStorage) ────────────────────
+function getTruckPhoto2(id){ try{ return localStorage.getItem('tph_'+id)||''; }catch(e){ return ''; } }
+function setTruckPhoto2(id,d){ try{ localStorage.setItem('tph_'+id,d); }catch(e){} }
+function delTruckPhoto2(id){ try{ localStorage.removeItem('tph_'+id); }catch(e){} }
+
+function onTruckPhoto(input){
+  if(!input.files||!input.files[0]) return;
+  var file=input.files[0];
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var MAX=600, w=img.width, h=img.height;
+      if(w>h){ if(w>MAX){ h=Math.round(h*MAX/w); w=MAX; } }
+      else { if(h>MAX){ w=Math.round(w*MAX/h); h=MAX; } }
+      var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      var data=cv.toDataURL('image/jpeg',0.7);
+      showTruckPhotoPreview(data);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value='';
+}
+
+function showTruckPhotoPreview(data){
+  var prev=document.getElementById('truck-photo-preview');
+  var ph=document.getElementById('truck-photo-placeholder');
+  var del=document.getElementById('truck-photo-del');
+  if(!prev) return;
+  prev.src=data; prev.style.display='block';
+  if(ph) ph.style.display='none';
+  if(del) del.style.display='flex';
+}
+
+function removeTruckPhoto(){
+  var prev=document.getElementById('truck-photo-preview');
+  var ph=document.getElementById('truck-photo-placeholder');
+  var del=document.getElementById('truck-photo-del');
+  if(prev){ prev.src=''; prev.style.display='none'; }
+  if(ph) ph.style.display='flex';
+  if(del) del.style.display='none';
+}
+
 function openModal(id){
   editingId = id;
   // Lire depuis allTrucks (Firebase, toujours à jour)
@@ -1284,6 +1364,9 @@ function openModal(id){
       document.getElementById('force-driver-lbl').textContent = t.driver||'—';
     } else fw.style.display='none';
   }
+  var existingPhoto = getTruckPhoto2(id);
+  if(existingPhoto){ showTruckPhotoPreview(existingPhoto); }
+  else { removeTruckPhoto(); }
   document.getElementById('qr-box').innerHTML = '<p style="font-size:12px;color:var(--gr);padding:16px">Cliquez "Enregistrer" pour générer le QR</p>';
   document.getElementById('qr-info').textContent = '';
   document.getElementById('btn-qr').style.display = 'none';
@@ -1312,9 +1395,17 @@ function saveTruck(){
     geoLink:        ex.geoLink        || ''
   };
   // Sauvegarder dans Firebase (pas localStorage)
+  // Sauvegarder la photo en localStorage
+  var prev=document.getElementById('truck-photo-preview');
+  if(prev && prev.src && prev.style.display!=='none'){
+    setTruckPhoto2(editingId, prev.src);
+  } else {
+    delTruckPhoto2(editingId);
+  }
   DB.ref('trucks/'+editingId).set(data).then(function(){
     genQR(data);
     document.getElementById('modal-title').textContent = data.name;
+    renderDash(); renderGrid(); renderGeo();
   });
 }
 
