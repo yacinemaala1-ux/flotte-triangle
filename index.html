@@ -541,9 +541,6 @@ input,textarea,select{font-family:inherit}
      qui créent des problèmes de portée entre blocs
 ======================================================= -->
 <script>
-// ─── Cloudinary ──────────────────────────────────────
-var CLOUDINARY_CLOUD  = 'drpdezq2g';
-var CLOUDINARY_PRESET = 'flotte triangle';
 var DB = null;
 
 // ─── Chargement Firebase dynamique ───────────────────
@@ -606,8 +603,6 @@ var pC = UP.get('c'), pN = UP.get('n'), pM = UP.get('m'), pP = UP.get('p'), pS =
 var IS_DRIVER = !!pC;
 
 // ─── Cloudinary ───────────────────────────────────────
-var CLOUDINARY_CLOUD  = 'drpdezq2g';
-var CLOUDINARY_PRESET = 'flotte triangle';
 
 // ─── Variables globales Firebase ─────────────────────
 var allTrucks = {};
@@ -1055,12 +1050,13 @@ function pickYN(btn){ var k=btn.dataset.k; document.querySelectorAll('[data-k="'
 function compressImg(dataUrl, cb){
   var img = new Image();
   img.onload = function(){
-    var MAX=700, w=img.width, h=img.height;
+    // 400px max, qualité 25% → ~15Ko par photo, stockage direct Firebase
+    var MAX=400, w=img.width, h=img.height;
     if(w>h){ if(w>MAX){ h=Math.round(h*MAX/w); w=MAX; } }
     else    { if(h>MAX){ w=Math.round(w*MAX/h); h=MAX; } }
     var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
     cv.getContext('2d').drawImage(img,0,0,w,h);
-    cb(cv.toDataURL('image/jpeg', 0.5));
+    cb(cv.toDataURL('image/jpeg', 0.25));
   };
   img.src = dataUrl;
 }
@@ -1169,28 +1165,9 @@ function handleSubmit(e){
   var sigDataUrl = sigCanvas ? sigCanvas.toDataURL('image/png') : '';
 
   // 1. Upload toutes les photos + signature sur Cloudinary
-  // Signature : gardée en base64 (légère), pas besoin de Cloudinary
-  // Photos seulement uploadées sur Cloudinary en parallèle
-  if(!photos.length){
-    saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, [], sigDataUrl, now, submitBtn);
-    return;
-  }
-
-  submitBtn.value = '⏳ Envoi '+photos.length+' photo(s)…';
-
-  var photoUrls = new Array(photos.length);
-  var remaining = photos.length;
-
-  photos.forEach(function(dataUrl, i){
-    uploadToCloudinary(dataUrl, function(err, url){
-      photoUrls[i] = url || '';
-      remaining--;
-      submitBtn.value = '⏳ Photos '+(photos.length-remaining)+'/'+photos.length+'…';
-      if(remaining === 0){
-        saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, photoUrls, sigDataUrl, now, submitBtn);
-      }
-    });
-  });
+  // Photos en base64 compressées → directement dans Firebase, pas de service externe
+  submitBtn.value = '⏳ Enregistrement…';
+  saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, photos.slice(), sigDataUrl, now, submitBtn);
 }
 
 function saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, photoUrls, sigUrl, now, submitBtn){
