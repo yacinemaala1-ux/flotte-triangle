@@ -915,36 +915,37 @@ function closeModal(){
 
 function saveTruck(){
   if(editingId===null) return;
-  var trucks = getTrucks();
-  var idx = -1;
-  for(var i=0;i<trucks.length;i++){ if(trucks[i].id===editingId){ idx=i; break; } }
-  if(idx===-1) return;
-  trucks[idx].name  = document.getElementById('edit-name').value.trim() || ('Camion #'+editingId);
-  trucks[idx].model = document.getElementById('edit-model').value.trim();
-  trucks[idx].plate = document.getElementById('edit-plate').value.trim().toUpperCase();
-  saveTrucks(trucks);
-  genQR(trucks[idx]);
-  document.getElementById('modal-title').textContent = trucks[idx].name;
-  renderGrid();
+  var ex = allTrucks[editingId] || {};
+  var data = {
+    id:      editingId,
+    name:    document.getElementById('edit-name').value.trim() || ('Camion #'+editingId),
+    model:   document.getElementById('edit-model').value.trim(),
+    plate:   document.getElementById('edit-plate').value.trim().toUpperCase(),
+    status:  ex.status  || 'free',
+    driver:  ex.driver  || '',
+    destination:    ex.destination    || '',
+    since:          ex.since          || null,
+    expectedReturn: ex.expectedReturn || null,
+    geoLink:        ex.geoLink        || ''
+  };
+  // Sauvegarder dans Firebase (pas localStorage)
+  DB.ref('trucks/'+editingId).set(data).then(function(){
+    genQR(data);
+    document.getElementById('modal-title').textContent = data.name;
+  });
 }
 
 function deleteTruck(){
   if(!confirm('Supprimer ce camion ?')) return;
-  var trucks = getTrucks().filter(function(t){ return t.id!==editingId; });
-  saveTrucks(trucks);
-  renderGrid();
+  DB.ref('trucks/'+editingId).remove();
   closeModal();
 }
 
 function addTruck(){
-  var trucks = getTrucks();
-  var maxId = 0;
-  trucks.forEach(function(t){ if(t.id>maxId) maxId=t.id; });
-  var newId = maxId+1;
-  trucks.push({id:newId,name:'Camion #'+newId,model:'',plate:'',status:'free',driver:'',destination:'',since:null,expectedReturn:null});
-  saveTrucks(trucks);
-  renderGrid();
-  openModal(newId);
+  var ids = Object.keys(allTrucks).map(Number);
+  var newId = ids.length ? Math.max.apply(null,ids)+1 : 1;
+  var data = {id:newId,name:'Camion #'+newId,model:'',plate:'',status:'free',driver:'',destination:'',since:null,expectedReturn:null,geoLink:''};
+  DB.ref('trucks/'+newId).set(data).then(function(){ openModal(newId); });
 }
 
 // QR
@@ -1053,19 +1054,53 @@ function delPhoto(i){ photos.splice(i,1); renderPhotos(); }
 
 // ── Signature ─────────────────────────────────────────
 function initSig(){
-  sigCanvas = document.getElementById('sig-canvas'); if(!sigCanvas) return;
+  sigCanvas = document.getElementById('sig-canvas');
+  if(!sigCanvas) return;
   sigCtx = sigCanvas.getContext('2d');
-  var W=sigCanvas.offsetWidth||300, DPR=window.devicePixelRatio||1;
-  sigCanvas.width=W*DPR; sigCanvas.height=150*DPR;
+
+  // Attacher les events MAINTENANT (avant resize)
+  function pos(e){
+    var r=sigCanvas.getBoundingClientRect(), ev=e.touches?e.touches[0]:e;
+    return{x:ev.clientX-r.left, y:ev.clientY-r.top};
+  }
+  function start(e){
+    e.preventDefault();
+    // Resize au premier touch si canvas encore à 0
+    if(sigCanvas.width===0 || sigCanvas.height===0) resizeSig();
+    sigDrawing=true;
+    var p=pos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y);
+  }
+  function move(e){
+    e.preventDefault();
+    if(!sigDrawing) return;
+    var p=pos(e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); sigTouched=true;
+  }
+  function end(){ sigDrawing=false; }
+
+  sigCanvas.addEventListener('mousedown',start);
+  sigCanvas.addEventListener('mousemove',move);
+  sigCanvas.addEventListener('mouseup',end);
+  sigCanvas.addEventListener('mouseleave',end);
+  sigCanvas.addEventListener('touchstart',start,{passive:false});
+  sigCanvas.addEventListener('touchmove',move,{passive:false});
+  sigCanvas.addEventListener('touchend',end);
+
+  // Resize après un délai pour que le DOM soit rendu
+  setTimeout(resizeSig, 300);
+}
+
+function resizeSig(){
+  if(!sigCanvas) return;
+  var W = sigCanvas.parentElement ? sigCanvas.parentElement.offsetWidth : window.innerWidth;
+  if(!W || W < 10) W = window.innerWidth - 40;
+  var DPR = window.devicePixelRatio || 1;
+  var oldData = null;
+  if(sigTouched){ try{ oldData = sigCtx.getImageData(0,0,sigCanvas.width,sigCanvas.height); }catch(e){} }
+  sigCanvas.width  = W * DPR;
+  sigCanvas.height = 150 * DPR;
   sigCtx.setTransform(DPR,0,0,DPR,0,0);
   sigCtx.strokeStyle='#1a1a18'; sigCtx.lineWidth=2.5; sigCtx.lineCap='round'; sigCtx.lineJoin='round';
-  function pos(e){ var r=sigCanvas.getBoundingClientRect(), ev=e.touches?e.touches[0]:e; return{x:ev.clientX-r.left,y:ev.clientY-r.top}; }
-  function start(e){ e.preventDefault(); sigDrawing=true; var p=pos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y); }
-  function move(e){ e.preventDefault(); if(!sigDrawing)return; var p=pos(e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); sigTouched=true; }
-  function end(){ sigDrawing=false; }
-  sigCanvas.addEventListener('mousedown',start); sigCanvas.addEventListener('mousemove',move);
-  sigCanvas.addEventListener('mouseup',end); sigCanvas.addEventListener('mouseleave',end);
-  sigCanvas.addEventListener('touchstart',start,{passive:false}); sigCanvas.addEventListener('touchmove',move,{passive:false}); sigCanvas.addEventListener('touchend',end);
+  if(oldData){ try{ sigCtx.putImageData(oldData,0,0); }catch(e){} }
 }
 function clearSig(){ if(!sigCtx)return; sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height); sigTouched=false; }
 
