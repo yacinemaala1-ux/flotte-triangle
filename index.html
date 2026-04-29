@@ -218,6 +218,28 @@ input,textarea,select{font-family:inherit}
 @media(min-width:500px){
   .pgrid{grid-template-columns:repeat(4,1fr)}
 }
+.se-badge.liv{background:var(--bl);color:var(--b)}.se-badge.ret{background:var(--gl);color:var(--g)}
+.dossier{background:#fff;border:1px solid var(--brd);border-radius:var(--rad);margin-bottom:14px;overflow:hidden}
+.dossier-head{padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.dossier-head:hover{background:var(--gl)}
+.dossier-ico{width:40px;height:40px;border-radius:8px;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.dossier-info{flex:1;min-width:0}
+.dossier-title{font-weight:700;font-size:14px}
+.dossier-sub{font-size:12px;color:var(--gr)}
+.dossier-tags{display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.dossier-tag{font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px}
+.dossier-tag.ok{background:var(--gl);color:var(--g)}
+.dossier-tag.enc{background:var(--bl);color:var(--b)}
+.dossier-tag.late{background:var(--ol);color:var(--o)}
+.dossier-body{border-top:1px solid var(--brd);display:none}
+.dossier-body.open{display:block}
+.dossier-fiche{padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--brd);cursor:pointer}
+.dossier-fiche:last-child{border-bottom:none}
+.dossier-fiche:hover{background:var(--grl)}
+.df-ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.df-info{flex:1;min-width:0}
+.df-title{font-size:13px;font-weight:600}
+.df-sub{font-size:12px;color:var(--gr)}
 </style>
 </head>
 <body>
@@ -274,8 +296,8 @@ input,textarea,select{font-family:inherit}
           <input type="month" id="suivi-month" style="border:1.5px solid var(--brd);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;outline:none;background:#fff" onchange="renderSuivi()">
           <div style="display:flex;gap:6px">
             <button class="sf-btn on" onclick="setSuiviFilter('all',this)">Tout</button>
-            <button class="sf-btn" onclick="setSuiviFilter('delivery',this)">🚚 Livraisons</button>
-            <button class="sf-btn" onclick="setSuiviFilter('return',this)">🏁 Retours</button>
+            <button class="sf-btn" onclick="setSuiviFilter('delivery',this)">🔑 Prises en charge</button>
+            <button class="sf-btn" onclick="setSuiviFilter('return',this)">🏠 Restitutions</button>
           </div>
         </div>
         <div id="suivi-list"><div class="empty-state">Aucune fiche</div></div>
@@ -337,7 +359,7 @@ input,textarea,select{font-family:inherit}
     <div class="d-num" id="d-num">#1</div>
     <div class="d-name" id="d-name">Camion</div>
     <div class="d-meta" id="d-meta">—</div>
-    <span class="d-typebadge" id="d-badge">🚚 Livraison — Prise en charge</span>
+    <span class="d-typebadge" id="d-badge">🔑 Prise en charge</span>
   </div>
 
   <!-- PROC-02 -->
@@ -454,7 +476,7 @@ input,textarea,select{font-family:inherit}
         <!-- Champs livrason uniquement — cachés si retour -->
         <div id="delivery-fields">
           <div class="frow">
-            <label class="flabel req">Destination / Chantier</label>
+            <label class="flabel req">Chantier / Lieu de travail</label>
             <input class="finput" type="text" id="f-dest" placeholder="Ex: Chantier Valenciennes">
           </div>
           <div class="frow">
@@ -865,41 +887,116 @@ function setSuiviFilter(f,btn){
 }
 
 function renderSuivi(){
-  var mVal=document.getElementById('suivi-month') ? document.getElementById('suivi-month').value : '';
-  var logs=Object.values(allLogs);
+  var mVal = document.getElementById('suivi-month') ? document.getElementById('suivi-month').value : '';
+  var logs = Object.values(allLogs);
   if(mVal){
     var parts=mVal.split('-'),yr=parseInt(parts[0]),mo=parseInt(parts[1]);
     logs=logs.filter(function(l){var d=new Date(l.date);return d.getFullYear()===yr&&d.getMonth()+1===mo;});
   }
-  if(suiviFilter!=='all') logs=logs.filter(function(l){return l.type===suiviFilter;});
-  var el=document.getElementById('suivi-list');
+  var el = document.getElementById('suivi-list');
   if(!logs.length){el.innerHTML='<div class="empty-state">Aucune fiche pour cette période</div>';return;}
-  logs.sort(function(a,b){return b.timestamp-a.timestamp;});
-  var byDay={},dayKeys=[];
+
+  var dossiers={};
   logs.forEach(function(l){
-    var d=new Date(l.date);
-    var key=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-    if(!byDay[key]){byDay[key]=[];dayKeys.push(key);}
-    byDay[key].push(l);
+    var key=l.truckId+'_'+l.driver.toLowerCase().trim();
+    if(!dossiers[key]) dossiers[key]={truck:l.truckName,plate:l.truckPlate,driver:l.driver,prise:null,resti:null,lastDate:0};
+    if(l.type==='delivery'){
+      if(!dossiers[key].prise||l.timestamp>dossiers[key].prise.timestamp) dossiers[key].prise=l;
+    } else {
+      if(!dossiers[key].resti||l.timestamp>dossiers[key].resti.timestamp) dossiers[key].resti=l;
+    }
+    if(l.timestamp>dossiers[key].lastDate) dossiers[key].lastDate=l.timestamp;
   });
-  var html='';
-  dayKeys.forEach(function(day){
-    var cnt=byDay[day].length;
-    html+='<div class="suivi-day"><div class="suivi-day-hd">'+day+' — <span style="background:var(--g);color:#fff;border-radius:4px;padding:1px 6px;font-size:11px">'+cnt+' fiche'+(cnt>1?'s':'')+'</span></div>';
-    byDay[day].forEach(function(log){
-      var isLiv=log.type==='delivery';
-      var heure=new Date(log.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-      html+='<div class="suivi-entry" onclick="viewSuiviLog(\'' + log.id + '\')">'
-        +'<div class="se-ico" style="background:'+(isLiv?'var(--bl)':'var(--gl)')+'">'+(isLiv?'🚚':'🏁')+'</div>'
-        +'<div class="se-info"><div class="se-title">'+esc(log.truckName||'—')+' — '+esc(log.driver||'—')+'</div>'
-        +'<div class="se-sub">'+(log.truckPlate?esc(log.truckPlate)+' · ':'')+heure+(log.destination?' · '+esc(log.destination):'')+'</div></div>'
-        +'<span class="se-badge '+(isLiv?'liv':'ret')+'">'+(isLiv?'Livraison':'Retour')+'</span>'
-        +'</div>';
-    });
-    html+='</div>';
+
+  var list=Object.values(dossiers);
+  if(suiviFilter==='delivery') list=list.filter(function(d){return !!d.prise;});
+  if(suiviFilter==='return')   list=list.filter(function(d){return !!d.resti;});
+  list.sort(function(a,b){return b.lastDate-a.lastDate;});
+
+  el.innerHTML='';
+  list.forEach(function(d,idx){
+    var isComplete=d.prise&&d.resti;
+    var isEnCours=d.prise&&!d.resti;
+    var tag=isComplete?'<span class="dossier-tag ok">&#10003; Terminé</span>':isEnCours?'<span class="dossier-tag enc">&#8987; En cours</span>':'';
+    var dateD=d.prise?new Date(d.prise.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
+    var dateF=d.resti?new Date(d.resti.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}):isEnCours?'En cours':'—';
+    var periode=dateD===dateF?dateD:dateD+' &#8594; '+dateF;
+    var did='dos_'+idx;
+
+    var div=document.createElement('div');
+    div.className='dossier';
+
+    var head=document.createElement('div');
+    head.className='dossier-head';
+    head.innerHTML='<div class="dossier-ico">&#x1F69B;</div>'
+      +'<div class="dossier-info">'
+        +'<div class="dossier-title">'+esc(d.truck)+' &mdash; '+esc(d.driver)+'</div>'
+        +'<div class="dossier-sub">'+esc(d.plate||'—')+' &middot; '+periode+'</div>'
+      +'</div>'
+      +'<div class="dossier-tags">'+tag+'</div>'
+      +'<span class="dos-arrow" id="'+did+'_arr">&#9658;</span>';
+    head.addEventListener('click', (function(id){ return function(){ toggleDossier(id); }; })(did));
+
+    var body=document.createElement('div');
+    body.className='dossier-body';
+    body.id=did;
+
+    // Fiche prise en charge
+    var pr=document.createElement('div');
+    if(d.prise){
+      var p=d.prise;
+      var hP=new Date(p.date).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      pr.className='dossier-fiche';
+      pr.innerHTML='<div class="df-ico" style="background:var(--bl)">&#x1F511;</div>'
+        +'<div class="df-info"><div class="df-title">Prise en charge</div>'
+        +'<div class="df-sub">'+hP+(p.destination?' &middot; '+esc(p.destination):'')+' &middot; '+p.km+' km &middot; Carburant: '+(p.fuel||'—')+'</div></div>'
+        +'<span class="se-badge liv">Voir &rsaquo;</span>';
+      pr.addEventListener('click', (function(id){ return function(){ viewSuiviLog(id); }; })(p.id));
+    } else {
+      pr.className='dossier-fiche';
+      pr.style.opacity='0.5';
+      pr.style.cursor='default';
+      pr.innerHTML='<div class="df-ico" style="background:var(--grl)">&#x1F511;</div>'
+        +'<div class="df-info"><div class="df-title" style="color:var(--gr)">Prise en charge</div>'
+        +'<div class="df-sub">Pas encore de fiche</div></div>';
+    }
+
+    // Fiche restitution
+    var rs=document.createElement('div');
+    if(d.resti){
+      var r=d.resti;
+      var hR=new Date(r.date).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      rs.className='dossier-fiche';
+      rs.innerHTML='<div class="df-ico" style="background:var(--gl)">&#x1F3E0;</div>'
+        +'<div class="df-info"><div class="df-title">Restitution</div>'
+        +'<div class="df-sub">'+hR+' &middot; '+r.km+' km &middot; Carburant: '+(r.fuel||'—')+'</div></div>'
+        +'<span class="se-badge ret">Voir &rsaquo;</span>';
+      rs.addEventListener('click', (function(id){ return function(){ viewSuiviLog(id); }; })(r.id));
+    } else {
+      rs.className='dossier-fiche';
+      rs.style.opacity='0.5';
+      rs.style.cursor='default';
+      rs.innerHTML='<div class="df-ico" style="background:var(--grl)">&#x1F3E0;</div>'
+        +'<div class="df-info"><div class="df-title" style="color:var(--gr)">Restitution</div>'
+        +'<div class="df-sub">Véhicule pas encore restitué</div></div>';
+    }
+
+    body.appendChild(pr);
+    body.appendChild(rs);
+    div.appendChild(head);
+    div.appendChild(body);
+    el.appendChild(div);
   });
-  el.innerHTML=html;
 }
+
+function toggleDossier(id){
+  var body=document.getElementById(id);
+  var arrow=document.getElementById(id+'_arr');
+  if(!body)return;
+  body.classList.toggle('open');
+  if(arrow)arrow.innerHTML=body.classList.contains('open')?'&#9660;':'&#9658;';
+}
+
 
 function viewSuiviLog(id){
   var log=allLogs[id];
@@ -958,7 +1055,7 @@ function renderHistory(){
   var sorted = logs.slice().sort(function(a,b){ return b.timestamp-a.timestamp; });
   el.innerHTML = sorted.map(function(log){
     var thumbs = (log.photos||[]).slice(0,2).map(function(p){ return '<img src="'+p+'" alt="">'; }).join('');
-    var typeStr = log.type==='delivery'?'Livraison':'Retour';
+    var typeStr = log.type==='delivery'?'Prise en charge':'Restitution';
     return '<div class="lcard">'
       +'<div class="lthumbs">'+thumbs+'</div>'
       +'<div class="linfo">'
@@ -1100,11 +1197,11 @@ function setupDriverUI(truckId, truckName, truckModel, truckPlate){
   document.getElementById('d-plate').textContent = truckPlate||'—';
   var badge=document.getElementById('d-badge'), edlH=document.getElementById('edl-head'), delF=document.getElementById('delivery-fields');
   if(isDelivery){
-    badge.textContent='🚚 Livraison — Prise en charge'; badge.className='d-typebadge tb-liv';
-    edlH.textContent='📏 État des lieux — À la livraison'; delF.style.display='block';
+    badge.textContent='🔑 Prise en charge'; badge.className='d-typebadge tb-liv';
+    edlH.textContent='📏 État des lieux — Prise en charge'; delF.style.display='block';
   } else {
-    badge.textContent='🏁 Retour — Restitution'; badge.className='d-typebadge tb-ret';
-    edlH.textContent='📏 État des lieux — Au retour'; delF.style.display='none';
+    badge.textContent='🏠 Restitution'; badge.className='d-typebadge tb-ret';
+    edlH.textContent='📏 État des lieux — Restitution'; delF.style.display='none';
   }
   document.getElementById('sig-date').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   setTimeout(initSig, 200);
@@ -1267,7 +1364,7 @@ function saveLog(logId, truckId, conductor, employe, km, dest, retour, obs, phot
   DB.ref().update(updates)
     .then(function(){
       currentLog = log; fromAdmin = false;
-      document.getElementById('suc-sub').textContent = 'Fiche '+(isDelivery?'de livraison':'de retour')+' enregistrée — '+log.dateStr;
+      document.getElementById('suc-sub').textContent = 'Fiche '+(isDelivery?'de prise en charge':'de restitution')+' enregistrée — '+log.dateStr;
       show('screen-success');
     })
     .catch(function(err){
@@ -1287,7 +1384,7 @@ function tab(rows){ return '<table class="ftable">'+rows.map(function(r){ return
 function cdot(v){ return v==='O'?'<span class="cdot cdot-o">O</span>':v==='N'?'<span class="cdot cdot-n">N</span>':'<span class="cdot cdot-d">—</span>'; }
 
 function renderFiche(log){
-  var typeStr = log.type==='delivery'?'Livraison — Prise en charge':'Retour — Restitution';
+  var typeStr = log.type==='delivery'?'Prise en charge':'Restitution';
   var html = sec('Identification', tab([
     ['Marque / Modèle', esc(log.marque||'—')],['Immatriculation', esc(log.immat||'—')],
     ['Conducteur', esc(log.driver)],['Type','<strong>'+typeStr+'</strong>'],['Date', esc(log.dateStr)]
