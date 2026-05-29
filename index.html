@@ -638,27 +638,45 @@ var graphTokenExpiry = 0;
 
 // ─── Init MSAL ───────────────────────────────────────────────
 function initMSAL(cb){
-  var config = {
-    auth: {
-      clientId: GRAPH_CLIENT_ID,
-      authority: 'https://login.microsoftonline.com/' + GRAPH_TENANT_ID,
-      redirectUri: window.location.origin + window.location.pathname
-    },
-    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
-  };
-  msalApp = new msal.PublicClientApplication(config);
+  try {
+    var config = {
+      auth: {
+        clientId: GRAPH_CLIENT_ID,
+        authority: 'https://login.microsoftonline.com/' + GRAPH_TENANT_ID,
+        redirectUri: window.location.origin + window.location.pathname
+      },
+      cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+    };
+    msalApp = new msal.PublicClientApplication(config);
 
-  // Gérer le retour de redirection OAuth
-  msalApp.handleRedirectPromise().then(function(resp){
-    if(resp && resp.accessToken){
-      graphToken = resp.accessToken;
-      graphTokenExpiry = Date.now() + (resp.expiresOn ? (resp.expiresOn.getTime() - Date.now()) : 3500000);
-    }
-    cb();
-  }).catch(function(err){
-    console.error('MSAL redirect error:', err);
-    cb();
-  });
+    // Timeout de sécurité : si MSAL bloque plus de 5s, on continue quand même
+    var done = false;
+    var timeout = setTimeout(function(){
+      if(!done){ done = true; console.warn('MSAL timeout, continuing'); cb(); }
+    }, 5000);
+
+    msalApp.handleRedirectPromise().then(function(resp){
+      if(!done){
+        done = true;
+        clearTimeout(timeout);
+        if(resp && resp.accessToken){
+          graphToken = resp.accessToken;
+          graphTokenExpiry = Date.now() + 3500000;
+        }
+        cb();
+      }
+    }).catch(function(err){
+      if(!done){
+        done = true;
+        clearTimeout(timeout);
+        console.error('MSAL redirect error:', err);
+        cb();
+      }
+    });
+  } catch(e) {
+    console.error('MSAL init error:', e);
+    cb(); // continuer malgré l'erreur
+  }
 }
 
 // ─── Obtenir un token (silencieux ou popup) ──────────────────
@@ -988,6 +1006,10 @@ var ADMIN_PWD    = 'triangle2026';
 var EMPLOYE_PWD  = 'triangle59';
 
 function startApp(){
+  // Cacher l'écran de chargement
+  var loader = document.getElementById('screen-loading');
+  if(loader) loader.style.display = 'none';
+
   if(IS_DRIVER){
     initDriver();
   } else {
@@ -2004,6 +2026,14 @@ document.addEventListener('DOMContentLoaded', function(){
   initMSAL(function(){ startApp(); });
 });
 </script>
+
+
+<!-- LOADING SCREEN -->
+<div id="screen-loading" style="display:flex;position:fixed;inset:0;background:var(--g);z-index:10000;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M21 12a9 9 0 11-6.219-8.56'/%3E%3C/svg%3E" style="animation:spin 1s linear infinite;width:40px;height:40px">
+  <span style="color:#fff;font-family:DM Sans,system-ui,sans-serif;font-size:14px;font-weight:600">Connexion Microsoft en cours…</span>
+</div>
+<style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
 
 <!-- ===== LOGIN SCREEN ===== -->
 <div id="screen-login" style="display:none;position:fixed;inset:0;background:var(--g);z-index:9999;align-items:center;justify-content:center;padding:20px;flex-direction:column">
