@@ -306,6 +306,7 @@ input,textarea,select{font-family:inherit}
 .geo-card-photo{width:100%;height:120px;object-fit:cover;display:block;background:var(--grl)}
 .geo-card-photo-placeholder{width:100%;height:80px;background:var(--grl);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--brd)}
 </style>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 </head>
 <body>
 
@@ -618,80 +619,353 @@ input,textarea,select{font-family:inherit}
   <div id="fiche-content"></div>
 </div>
 
-<!-- ======================================================
-     JAVASCRIPT — tout dans un seul bloc, pas de let/const
-     qui créent des problèmes de portée entre blocs
-======================================================= -->
 <script>
-var DB = null;
+// ============================================================
+//  MICROSOFT GRAPH API — Remplace Firebase
+//  Client ID  : e3b76a9d-6867-41fd-923d-715c76e6d239
+//  Tenant ID  : 3275051d-8d2d-4f73-9ea8-bdcb96f800e4
+// ============================================================
 
-// ─── Chargement Firebase dynamique ───────────────────
-function loadScript(url, cb) {
-  var s = document.createElement('script');
-  s.src = url;
-  s.onload = cb;
-  s.onerror = function() { alert('Erreur chargement: ' + url); };
-  document.head.appendChild(s);
+var GRAPH_CLIENT_ID = 'e3b76a9d-6867-41fd-923d-715c76e6d239';
+var GRAPH_TENANT_ID = '3275051d-8d2d-4f73-9ea8-bdcb96f800e4';
+var GRAPH_SCOPES    = ['Files.ReadWrite', 'User.Read'];
+var GRAPH_BASE      = 'https://graph.microsoft.com/v1.0';
+var ONEDRIVE_FOLDER = 'TriangleFlotte'; // Dossier créé automatiquement dans OneDrive
+
+var msalApp = null;
+var graphToken = null;
+var graphTokenExpiry = 0;
+
+// ─── Init MSAL ───────────────────────────────────────────────
+function initMSAL(cb){
+  var config = {
+    auth: {
+      clientId: GRAPH_CLIENT_ID,
+      authority: 'https://login.microsoftonline.com/' + GRAPH_TENANT_ID,
+      redirectUri: window.location.origin + window.location.pathname
+    },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+  };
+  msalApp = new msal.PublicClientApplication(config);
+
+  // Gérer le retour de redirection OAuth
+  msalApp.handleRedirectPromise().then(function(resp){
+    if(resp && resp.accessToken){
+      graphToken = resp.accessToken;
+      graphTokenExpiry = Date.now() + (resp.expiresOn ? (resp.expiresOn.getTime() - Date.now()) : 3500000);
+    }
+    cb();
+  }).catch(function(err){
+    console.error('MSAL redirect error:', err);
+    cb();
+  });
 }
 
-function initFirebase() {
-  firebase.initializeApp({
-    apiKey: "AIzaSyBYYCelsusDT0qEGKdmYa2Cop-v2uZSJME",
-    authDomain: "flotte-triangle.firebaseapp.com",
-    databaseURL: "https://flotte-triangle-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "flotte-triangle",
-    storageBucket: "flotte-triangle.firebasestorage.app",
-    messagingSenderId: "226293170947",
-    appId: "1:226293170947:web:bdc32a160185410147df36"
-  });
-  DB = firebase.database();
-  // Démarrer l'app une fois Firebase prêt
-  startApp();
+// ─── Obtenir un token (silencieux ou popup) ──────────────────
+function getToken(cb){
+  if(graphToken && Date.now() < graphTokenExpiry - 60000){
+    return cb(null, graphToken);
+  }
+  var accounts = msalApp.getAllAccounts();
+  if(accounts.length === 0){
+    // Pas connecté → login popup
+    msalApp.loginPopup({ scopes: GRAPH_SCOPES }).then(function(resp){
+      graphToken = resp.accessToken;
+      graphTokenExpiry = Date.now() + 3500000;
+      cb(null, graphToken);
+    }).catch(function(e){ cb(e); });
+    return;
+  }
+  msalApp.acquireTokenSilent({ scopes: GRAPH_SCOPES, account: accounts[0] })
+    .then(function(resp){
+      graphToken = resp.accessToken;
+      graphTokenExpiry = resp.expiresOn ? resp.expiresOn.getTime() : Date.now() + 3500000;
+      cb(null, graphToken);
+    })
+    .catch(function(){
+      msalApp.acquireTokenPopup({ scopes: GRAPH_SCOPES, account: accounts[0] })
+        .then(function(resp){
+          graphToken = resp.accessToken;
+          graphTokenExpiry = Date.now() + 3500000;
+          cb(null, graphToken);
+        }).catch(function(e){ cb(e); });
+    });
 }
 
-// Charger les deux SDK dans l'ordre
-loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js', function() {
-  loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js', function() {
-    initFirebase();
+// ─── Appel HTTP générique vers Graph API ─────────────────────
+function graphCall(method, path, body, cb){
+  getToken(function(err, token){
+    if(err){ return cb(err); }
+    var opts = {
+      method: method,
+      headers: { 'Authorization': 'Bearer ' + token }
+    };
+    if(body !== null){
+      if(typeof body === 'string'){
+        opts.headers['Content-Type'] = 'text/plain';
+        opts.body = body;
+      } else {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+    }
+    fetch(GRAPH_BASE + path, opts)
+      .then(function(r){
+        if(r.status === 204 || r.status === 201){ return cb(null, null); }
+        return r.json().then(function(d){ cb(null, d); });
+      })
+      .catch(function(e){ cb(e); });
   });
-});
+}
 
-// ─── Helpers LS ───────────────────────────────────────
+// ─── S'assurer que le dossier OneDrive existe ────────────────
+var _folderReady = false;
+function ensureFolder(cb){
+  if(_folderReady){ return cb(); }
+  graphCall('GET', '/me/drive/root:/' + ONEDRIVE_FOLDER, null, function(err, data){
+    if(!err && data && !data.error){
+      _folderReady = true; return cb();
+    }
+    // Créer le dossier
+    graphCall('POST', '/me/drive/root/children', {
+      name: ONEDRIVE_FOLDER,
+      folder: {},
+      '@microsoft.graph.conflictBehavior': 'rename'
+    }, function(err2){
+      if(!err2) _folderReady = true;
+      cb(err2);
+    });
+  });
+}
+
+// ─── Lire un fichier JSON dans OneDrive ──────────────────────
+function readJSON(filename, cb){
+  ensureFolder(function(){
+    graphCall('GET', '/me/drive/root:/' + ONEDRIVE_FOLDER + '/' + filename + ':/content', null, function(err, data){
+      if(err || (data && data.error)){ return cb(null, null); }
+      cb(null, data);
+    });
+  });
+}
+
+// ─── Écrire un fichier JSON dans OneDrive ────────────────────
+function writeJSON(filename, obj, cb){
+  ensureFolder(function(){
+    var content = JSON.stringify(obj, null, 2);
+    getToken(function(err, token){
+      if(err){ return cb && cb(err); }
+      fetch(GRAPH_BASE + '/me/drive/root:/' + ONEDRIVE_FOLDER + '/' + filename + ':/content', {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: content
+      }).then(function(r){
+        return r.json().then(function(d){ cb && cb(null, d); });
+      }).catch(function(e){ cb && cb(e); });
+    });
+  });
+}
+
+// ─── Upload une photo (base64 → fichier binaire OneDrive) ────
+function uploadPhoto(logId, index, base64DataUrl, cb){
+  ensureFolder(function(){
+    // Convertir base64 en blob
+    var parts = base64DataUrl.split(',');
+    var mime  = parts[0].match(/:(.*?);/)[1];
+    var bstr  = atob(parts[1]);
+    var n = bstr.length;
+    var u8arr = new Uint8Array(n);
+    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+    var blob = new Blob([u8arr], { type: mime });
+
+    var filename = ONEDRIVE_FOLDER + '/photos/' + logId + '_' + index + '.jpg';
+    getToken(function(err, token){
+      if(err){ return cb(null, base64DataUrl); } // fallback: garder base64
+      fetch(GRAPH_BASE + '/me/drive/root:/' + filename + ':/content', {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': mime
+        },
+        body: blob
+      }).then(function(r){ return r.json(); })
+        .then(function(d){
+          // Retourner l'URL de partage ou le webUrl
+          cb(null, d.webUrl || base64DataUrl);
+        }).catch(function(){ cb(null, base64DataUrl); });
+    });
+  });
+}
+
+// ─── DB simulée — compatibilité avec le code existant ────────
+//  Remplace : DB.ref('trucks').on('value', fn)  /  DB.ref('x').set(y)  /  DB.ref().update(u)
+var DB = {
+  _listeners: {},   // { path: [fn, fn] }
+  _cache: { trucks: {}, logs: {} },
+  _saving: false,
+
+  ref: function(path){
+    return new DBRef(path || '');
+  },
+
+  _notify: function(root){
+    var listeners = DB._listeners[root] || [];
+    var data = DB._cache[root] || {};
+    listeners.forEach(function(fn){ fn({ val: function(){ return data; } }); });
+  }
+};
+
+function DBRef(path){
+  this.path = path;
+}
+
+DBRef.prototype.on = function(event, cb){
+  // event = 'value'
+  var root = this.path.split('/')[0];
+  if(!DB._listeners[root]) DB._listeners[root] = [];
+  DB._listeners[root].push(cb);
+
+  // Charger depuis OneDrive et appeler immédiatement
+  var self = this;
+  readJSON(root + '.json', function(err, data){
+    if(!data){ data = {}; }
+    DB._cache[root] = data;
+    cb({ val: function(){ return data; } });
+  });
+};
+
+DBRef.prototype.once = function(event, cb){
+  var root = this.path.split('/')[0];
+  var subpath = this.path.split('/').slice(1).join('/');
+  readJSON(root + '.json', function(err, data){
+    if(!data){ data = {}; }
+    var value = subpath ? getNestedValue(data, subpath) : data;
+    cb({ val: function(){ return value; } });
+  });
+};
+
+DBRef.prototype.set = function(value, cb){
+  var parts = this.path.split('/');
+  var root  = parts[0];
+  var sub   = parts.slice(1).join('/');
+
+  if(!DB._cache[root]) DB._cache[root] = {};
+  if(sub){
+    setNestedValue(DB._cache[root], sub, value);
+  } else {
+    DB._cache[root] = value;
+  }
+
+  writeJSON(root + '.json', DB._cache[root], function(err){
+    DB._notify(root);
+    if(cb) cb(err);
+  });
+
+  // Retourner une promesse pour compatibilité .then()
+  return { then: function(fn){ setTimeout(function(){ fn && fn(); }, 100); return { catch: function(){} }; } };
+};
+
+DBRef.prototype.update = function(updates, cb){
+  // updates peut être { 'trucks/1/status': 'free', 'logs/log_123': {...} }
+  var roots = {};
+  Object.keys(updates).forEach(function(key){
+    var parts = key.split('/');
+    var root  = parts[0];
+    var sub   = parts.slice(1).join('/');
+    if(!roots[root]) roots[root] = true;
+    if(!DB._cache[root]) DB._cache[root] = {};
+    if(sub){
+      if(updates[key] === null){
+        deleteNestedValue(DB._cache[root], sub);
+      } else {
+        setNestedValue(DB._cache[root], sub, updates[key]);
+      }
+    } else {
+      DB._cache[root] = updates[key];
+    }
+  });
+
+  var rootsArr = Object.keys(roots);
+  var done = 0;
+  rootsArr.forEach(function(root){
+    writeJSON(root + '.json', DB._cache[root], function(){
+      DB._notify(root);
+      done++;
+      if(done === rootsArr.length && cb) cb();
+    });
+  });
+
+  return { then: function(fn){ setTimeout(function(){ fn && fn(); }, 200); return { catch: function(){} }; } };
+};
+
+DBRef.prototype.remove = function(cb){
+  var parts = this.path.split('/');
+  var root  = parts[0];
+  var sub   = parts.slice(1).join('/');
+  if(!DB._cache[root]) DB._cache[root] = {};
+  if(sub){
+    deleteNestedValue(DB._cache[root], sub);
+  } else {
+    DB._cache[root] = {};
+  }
+  writeJSON(root + '.json', DB._cache[root], function(){
+    DB._notify(root);
+    if(cb) cb();
+  });
+};
+
+// ─── Helpers objet imbriqué ───────────────────────────────────
+function getNestedValue(obj, path){
+  var parts = path.split('/');
+  var cur = obj;
+  for(var i=0; i<parts.length; i++){
+    if(cur === null || cur === undefined) return null;
+    cur = cur[parts[i]];
+  }
+  return cur !== undefined ? cur : null;
+}
+
+function setNestedValue(obj, path, value){
+  var parts = path.split('/');
+  var cur = obj;
+  for(var i=0; i<parts.length-1; i++){
+    if(cur[parts[i]] === undefined || cur[parts[i]] === null) cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length-1]] = value;
+}
+
+function deleteNestedValue(obj, path){
+  var parts = path.split('/');
+  var cur = obj;
+  for(var i=0; i<parts.length-1; i++){
+    if(!cur[parts[i]]) return;
+    cur = cur[parts[i]];
+  }
+  delete cur[parts[parts.length-1]];
+}
+
+// ─── Photos camions — stockées dans localStorage (petite taille) ──
+function getTruckPhoto2(id){ try{ return localStorage.getItem('tph_'+id)||''; }catch(e){ return ''; } }
+function setTruckPhoto2(id,d){ try{ localStorage.setItem('tph_'+id,d); }catch(e){} }
+function delTruckPhoto2(id){ try{ localStorage.removeItem('tph_'+id); }catch(e){} }
+
+// ─── Helpers LS (compatibilité) ───────────────────────────────
 function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
 function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
 
-// ─── Données ──────────────────────────────────────────
-function getTrucks(){ return lsGet('trucks') || []; }
-function getLogs()  { return lsGet('logs')   || []; }
-function getSettings(){ return lsGet('settings') || {}; }
-
-function saveTrucks(arr){ lsSet('trucks', arr); }
-function saveLogs(arr){
-  // Compression si quota: on réduit photos des anciennes fiches
-  if(!lsSet('logs', arr)){
-    for(var i=0;i<arr.length-1;i++){
-      if(arr[i].photos && arr[i].photos.length>1) arr[i].photos = arr[i].photos.slice(0,1);
-    }
-    if(!lsSet('logs', arr)){
-      for(var j=0;j<arr.length-1;j++){ arr[j].photos=[]; arr[j].signature=''; }
-      lsSet('logs', arr);
-    }
-  }
-}
-
-// ─── Mode détection ───────────────────────────────────
+// ─── Détection mode chauffeur ─────────────────────────────────
 var UP = new URLSearchParams(window.location.search);
 var pC = UP.get('c'), pN = UP.get('n'), pM = UP.get('m'), pP = UP.get('p'), pS = UP.get('s');
 var IS_DRIVER = !!pC;
 
-// ─── Cloudinary ───────────────────────────────────────
-
-// ─── Variables globales Firebase ─────────────────────
+// ─── Variables globales ───────────────────────────────────────
 var allTrucks = {};
 var allLogs   = {};
 var suiviFilter = 'all';
 
-// ─── Variables driver (globales, pas de let/const) ────
 var photos       = [];
 var fuelVal      = '';
 var checks       = {pneuAV:null, pneuAR:null, secours:null, interieur:null};
@@ -701,7 +975,7 @@ var currentLog   = null;
 var editingId    = null;
 var fromAdmin    = false;
 
-// ─── Affichage des écrans ─────────────────────────────
+// ─── Affichage des écrans ─────────────────────────────────────
 function show(id){
   ['screen-admin','screen-driver','screen-success','screen-fiche'].forEach(function(s){
     document.getElementById(s).style.display = (s===id)?'block':'none';
@@ -709,17 +983,14 @@ function show(id){
   window.scrollTo(0,0);
 }
 
-// ─── INIT ─────────────────────────────────────────────
-// startApp() est appelé par le callback Firebase une fois prêt
+// ─── INIT ─────────────────────────────────────────────────────
 var ADMIN_PWD    = 'triangle2026';
 var EMPLOYE_PWD  = 'triangle59';
 
 function startApp(){
   if(IS_DRIVER){
-    // Mode chauffeur : arrivé via QR code → formulaire direct
     initDriver();
   } else {
-    // Page d'accueil : demander quel mode
     showLoginScreen();
   }
 }
@@ -1727,6 +1998,11 @@ function renderFiche(log){
 // ══════════════════════════════════════════════════════
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function dec(v){ try{ return v?decodeURIComponent(v):''; }catch(e){ return v||''; } }
+
+// DEMARRAGE
+document.addEventListener('DOMContentLoaded', function(){
+  initMSAL(function(){ startApp(); });
+});
 </script>
 
 <!-- ===== LOGIN SCREEN ===== -->
@@ -1770,25 +2046,6 @@ function dec(v){ try{ return v?decodeURIComponent(v):''; }catch(e){ return v||''
 </div>
 
 
-<!-- MODAL EDIT DOSSIER (admin) -->
-<div id="modal-edit-dossier">
-  <div class="modal" style="max-width:420px">
-    <div class="m-head">
-      <span class="m-title">Modifier la mise en service</span>
-      <button class="m-close" onclick="document.getElementById('modal-edit-dossier').classList.remove('on')">×</button>
-    </div>
-    <div class="m-body">
-      <div class="fg"><label class="fl">Conducteur</label><input class="fi" id="ed-driver" placeholder="Prénom Nom"></div>
-      <div class="fg"><label class="fl">Chantier / Lieu de travail</label><input class="fi" id="ed-dest" placeholder="Ex: Valenciennes"></div>
-      <div class="fg"><label class="fl">Retour prévu</label><input class="fi" type="datetime-local" id="ed-return"></div>
-      <div class="fg"><label class="fl">Kilométrage départ</label><input class="fi" type="number" id="ed-km" placeholder="Ex: 45230"></div>
-    </div>
-    <div class="m-foot">
-      <button class="btn-gr" onclick="document.getElementById('modal-edit-dossier').classList.remove('on')">Annuler</button>
-      <button class="btn-g" onclick="saveEditDossier()">Enregistrer</button>
-    </div>
-  </div>
-</div>
 <!-- MODAL EDIT DOSSIER (admin) -->
 <div id="modal-edit-dossier">
   <div class="modal" style="max-width:420px">
