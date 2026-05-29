@@ -660,8 +660,10 @@ function initMSAL(cb){
         done = true;
         clearTimeout(timeout);
         if(resp && resp.accessToken){
+          // Token reçu après redirection mobile
           graphToken = resp.accessToken;
           graphTokenExpiry = Date.now() + 3500000;
+          console.log('Token reçu via redirection mobile');
         }
         cb();
       }
@@ -679,21 +681,36 @@ function initMSAL(cb){
   }
 }
 
-// ─── Obtenir un token (silencieux ou popup) ──────────────────
+// ─── Détection mobile ────────────────────────────────────────
+function isMobile(){
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+// ─── Obtenir un token (popup sur PC, redirection sur mobile) ─
 function getToken(cb){
   if(graphToken && Date.now() < graphTokenExpiry - 60000){
     return cb(null, graphToken);
   }
   var accounts = msalApp.getAllAccounts();
+
   if(accounts.length === 0){
-    // Pas connecté → login popup
-    msalApp.loginPopup({ scopes: GRAPH_SCOPES }).then(function(resp){
-      graphToken = resp.accessToken;
-      graphTokenExpiry = Date.now() + 3500000;
-      cb(null, graphToken);
-    }).catch(function(e){ cb(e); });
+    // Pas connecté
+    if(isMobile()){
+      // Mobile → redirection (pas de popup)
+      msalApp.loginRedirect({ scopes: GRAPH_SCOPES });
+      // La page va se recharger, le token sera récupéré dans handleRedirectPromise
+    } else {
+      // PC → popup
+      msalApp.loginPopup({ scopes: GRAPH_SCOPES }).then(function(resp){
+        graphToken = resp.accessToken;
+        graphTokenExpiry = Date.now() + 3500000;
+        cb(null, graphToken);
+      }).catch(function(e){ cb(e); });
+    }
     return;
   }
+
+  // Déjà connecté → token silencieux
   msalApp.acquireTokenSilent({ scopes: GRAPH_SCOPES, account: accounts[0] })
     .then(function(resp){
       graphToken = resp.accessToken;
@@ -701,12 +718,16 @@ function getToken(cb){
       cb(null, graphToken);
     })
     .catch(function(){
-      msalApp.acquireTokenPopup({ scopes: GRAPH_SCOPES, account: accounts[0] })
-        .then(function(resp){
-          graphToken = resp.accessToken;
-          graphTokenExpiry = Date.now() + 3500000;
-          cb(null, graphToken);
-        }).catch(function(e){ cb(e); });
+      if(isMobile()){
+        msalApp.acquireTokenRedirect({ scopes: GRAPH_SCOPES, account: accounts[0] });
+      } else {
+        msalApp.acquireTokenPopup({ scopes: GRAPH_SCOPES, account: accounts[0] })
+          .then(function(resp){
+            graphToken = resp.accessToken;
+            graphTokenExpiry = Date.now() + 3500000;
+            cb(null, graphToken);
+          }).catch(function(e){ cb(e); });
+      }
     });
 }
 
