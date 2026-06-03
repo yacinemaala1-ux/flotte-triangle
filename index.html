@@ -1248,7 +1248,13 @@ function renderDash(){
 // Trucks grid
 function forceRetourDash(id){
   if(!confirm('Marquer ce véhicule comme disponible ?')) return;
-  DB.ref('trucks/'+id).update({status:'free',driver:'',destination:'',since:null,expectedReturn:null});
+  var updates = {};
+  updates['trucks/'+id+'/status']         = 'free';
+  updates['trucks/'+id+'/driver']         = '';
+  updates['trucks/'+id+'/destination']    = '';
+  updates['trucks/'+id+'/since']          = null;
+  updates['trucks/'+id+'/expectedReturn'] = null;
+  DB.ref().update(updates);
 }
 
 var suiviFilter='all';
