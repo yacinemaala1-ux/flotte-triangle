@@ -1671,7 +1671,7 @@ function showQRModal(url, truckName){
   
   var qrContainer = document.createElement('div');
   qrContainer.id = 'qr-' + Date.now();
-  qrContainer.style.cssText = 'margin:20px 0;display:flex;justify-content:center;min-height:250px';
+  qrContainer.style.cssText = 'margin:20px 0;display:flex;justify-content:center;min-height:300px';
   card.appendChild(qrContainer);
   
   var expiryText = document.createElement('p');
@@ -1688,22 +1688,25 @@ function showQRModal(url, truckName){
   modal.appendChild(card);
   document.body.appendChild(modal);
   
-  // Générer le QR code
+  // Générer le QR code avec paramètres optimisés
   try {
     if(typeof QRCode === 'undefined'){
       throw new Error('Librairie QRCode non disponible');
     }
     var qrEl = document.getElementById(qrContainer.id);
-    new QRCode(qrEl, { 
-      text: url, 
-      width: 250, 
-      height: 250,
-      colorDark: '#1a1a18',
-      colorLight: '#ffffff'
+    
+    // Utiliser les mêmes paramètres que dans le code original
+    new QRCode(qrEl, {
+      text: url,
+      width: 220,
+      height: 220,
+      correctLevel: QRCode.CorrectLevel.H  // Niveau de correction élevé pour longues données
     });
+    
+    console.log('✅ QR code généré avec succès');
   } catch(e){
     console.error('Erreur génération QR:', e);
-    qrContainer.innerHTML = '<div style="color:#dc2626;font-size:14px">❌ Erreur lors de la génération du QR<br><small>'+e.message+'</small></div>';
+    qrContainer.innerHTML = '<div style="color:#dc2626;font-size:14px;padding:40px 20px"><strong>❌ Erreur lors de la génération du QR</strong><br><small style="color:#999">'+e.message+'</small></div>';
   }
 }
 
