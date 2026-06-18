@@ -1622,27 +1622,33 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 // ════════════════════════════════════════════════════════
 function generateQRWithToken(truckId, truckName){
   // Vérifier qu'on est connecté à Microsoft
-  if(!graphToken || Date.now() >= graphTokenExpiry - 60000){
-    alert('❌ Tu dois être connecté à Microsoft. Va dans le tableau de bord et accepte la connexion en premier.');
+  if(!graphToken){
+    alert('❌ Tu dois être connecté à Microsoft. Rafraîchis la page et accepte la connexion.');
     return;
   }
   
   // Vérifier que le token n'a pas expiré
-  var now = new Date();
-  if(!graphToken){
+  if(Date.now() >= graphTokenExpiry - 60000){
     alert('⚠️ Token expiré. Rafraîchis la page et reconnecte-toi.');
     return;
   }
   
-  // Construire l'URL du QR avec le token encodé
-  var base = window.location.origin + window.location.pathname;
-  var encodedToken = btoa(graphToken); // Encoder en base64
-  var qrUrl = base + '?c=' + truckId 
-    + '&n=' + encodeURIComponent(truckName||'Camion')
-    + '&token=' + encodedToken;
-  
-  // Afficher le QR dans une modale
-  showQRModal(qrUrl, truckName);
+  try {
+    // Construire l'URL du QR avec le token encodé
+    var base = window.location.origin + window.location.pathname;
+    var encodedToken = btoa(graphToken); // Encoder en base64
+    var qrUrl = base + '?c=' + truckId 
+      + '&n=' + encodeURIComponent(truckName||'Camion')
+      + '&token=' + encodedToken;
+    
+    console.log('QR URL générée:', qrUrl.substring(0, 80) + '...');
+    
+    // Afficher le QR dans une modale
+    showQRModal(qrUrl, truckName);
+  } catch(e){
+    console.error('Erreur génération QR:', e);
+    alert('❌ Erreur lors de la génération du QR:\n' + e.message);
+  }
 }
 
 function showQRModal(url, truckName){
@@ -1654,7 +1660,7 @@ function showQRModal(url, truckName){
   card.style.cssText = 'background:#fff;border-radius:12px;padding:32px;max-width:500px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.2)';
   
   var title = document.createElement('h2');
-  title.textContent = 'QR Code - ' + (truckName || 'Camion');
+  title.textContent = 'QR Code – ' + (truckName || 'Camion');
   title.style.cssText = 'margin:0 0 16px;font-size:18px;color:#1a1a18';
   card.appendChild(title);
   
@@ -1664,8 +1670,8 @@ function showQRModal(url, truckName){
   card.appendChild(hint);
   
   var qrContainer = document.createElement('div');
-  qrContainer.id = 'qr-container-' + Date.now();
-  qrContainer.style.cssText = 'margin:20px 0;display:flex;justify-content:center';
+  qrContainer.id = 'qr-' + Date.now();
+  qrContainer.style.cssText = 'margin:20px 0;display:flex;justify-content:center;min-height:250px';
   card.appendChild(qrContainer);
   
   var expiryText = document.createElement('p');
@@ -1684,11 +1690,20 @@ function showQRModal(url, truckName){
   
   // Générer le QR code
   try {
+    if(typeof QRCode === 'undefined'){
+      throw new Error('Librairie QRCode non disponible');
+    }
     var qrEl = document.getElementById(qrContainer.id);
-    new QRCode(qrEl, { text: url, width: 250, height: 250 });
+    new QRCode(qrEl, { 
+      text: url, 
+      width: 250, 
+      height: 250,
+      colorDark: '#1a1a18',
+      colorLight: '#ffffff'
+    });
   } catch(e){
     console.error('Erreur génération QR:', e);
-    qrContainer.textContent = '❌ Erreur lors de la génération du QR';
+    qrContainer.innerHTML = '<div style="color:#dc2626;font-size:14px">❌ Erreur lors de la génération du QR<br><small>'+e.message+'</small></div>';
   }
 }
 
